@@ -4,8 +4,9 @@ return [
     // Google Cloud Console で発行した YouTube Data API v3 のキー
     'api_key' => 'YOUR_API_KEY',
 
-    // 生成する HTML の出力先（さくらのレンタルサーバなら ~/www 配下）
-    'output_html' => '/home/YOUR_ACCOUNT/www/indie-songs/index.html',
+    // 生成する HTML の出力先。このフォルダをホーム直下（~/youtube-indie-songs）に置けば
+    // ~/www/indie-songs/index.html に出力され、https://アカウント名.sakura.ne.jp/indie-songs/ で見られる
+    'output_html' => dirname(__DIR__) . '/www/indie-songs/index.html',
 
     // 検索キーワード
     'keywords' => ['オリジナル曲', 'オリジナルソング', 'オリジナル楽曲', 'MV', 'music video'],

@@ -34,7 +34,7 @@ cron（毎朝7時）→ fetch.php（PHP CLI）→ YouTube Data API v3 → 静的
 
 1. Google Cloud Console でプロジェクトを作成し「YouTube Data API v3」を有効化、API キーを発行
 2. このフォルダを公開ディレクトリ外にアップロード（例: `/home/アカウント名/youtube-indie-songs/`）
-3. `config.sample.php` を `config.php` にコピーして API キーと出力先（例: `/home/アカウント名/www/indie-songs/index.html`）を設定
+3. `config.sample.php` を `config.php` にコピーして API キーを設定（出力先は自動で `~/www/indie-songs/index.html`）
 4. SSH で動作確認: `/usr/local/bin/php /home/アカウント名/youtube-indie-songs/fetch.php`
 5. コントロールパネル →「スクリプト設定」→「CRON設定」で登録
    - 実行コマンド: `/usr/local/bin/php /home/アカウント名/youtube-indie-songs/fetch.php`
