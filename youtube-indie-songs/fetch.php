@@ -10,6 +10,7 @@ date_default_timezone_set('Asia/Tokyo');
 
 $config = require __DIR__ . '/config.php';
 $apiKey = $config['api_key'];
+require __DIR__ . '/functions.php';
 
 function api_get(string $endpoint, array $params): array
 {
@@ -28,15 +29,9 @@ function api_get(string $endpoint, array $params): array
     return json_decode($body, true);
 }
 
-// 日本語（ひらがな・カタカナ・漢字）が含まれるか
-function has_japanese(string $text): bool
-{
-    return preg_match('/[\x{3040}-\x{30FF}\x{4E00}-\x{9FFF}]/u', $text) === 1;
-}
-
 // 1. キーワード検索で候補動画を集める（search.list: 100 ユニット/回）
 $publishedAfter = gmdate('Y-m-d\TH:i:s\Z', time() - $config['days'] * 86400);
-$videoIds = [];
+$videoIds = []; // videoId => ヒットしたキーワード一覧
 foreach ($config['keywords'] as $keyword) {
     $pageToken = null;
     for ($page = 0; $page < $config['pages_per_keyword']; $page++) {
@@ -57,7 +52,7 @@ foreach ($config['keywords'] as $keyword) {
         }
         $res = api_get('search', $params);
         foreach ($res['items'] ?? [] as $item) {
-            $videoIds[$item['id']['videoId']] = true;
+            $videoIds[$item['id']['videoId']][] = $keyword;
         }
         $pageToken = $res['nextPageToken'] ?? null;
         if (!$pageToken) {
@@ -65,6 +60,7 @@ foreach ($config['keywords'] as $keyword) {
         }
     }
 }
+$hitKeywords = $videoIds;
 $videoIds = array_keys($videoIds);
 
 // 2. 動画の詳細（再生数・言語）を取得（videos.list: 1 ユニット/50 件）
@@ -72,7 +68,7 @@ $videos = [];
 foreach (array_chunk($videoIds, 50) as $chunk) {
     $res = api_get('videos', [
         'key' => $apiKey,
-        'part' => 'snippet,statistics',
+        'part' => 'snippet,statistics,contentDetails',
         'id' => implode(',', $chunk),
     ]);
     foreach ($res['items'] ?? [] as $v) {
@@ -109,6 +105,19 @@ foreach ($videos as $v) {
     // 日本語判定: 音声言語が ja、またはタイトル/説明文に日本語を含む
     $lang = $sn['defaultAudioLanguage'] ?? $sn['defaultLanguage'] ?? '';
     if (strpos($lang, 'ja') !== 0 && !has_japanese($sn['title'] . ' ' . ($sn['description'] ?? ''))) {
+        continue;
+    }
+    // 「MV」「music video」でしかヒットしていない動画は、説明欄にひらがなが必要
+    $onlyLooseKeywords = !array_diff($hitKeywords[$v['id']] ?? [], $config['keywords_require_hiragana']);
+    if ($onlyLooseKeywords && !has_hiragana($sn['description'] ?? '')) {
+        continue;
+    }
+    // 歌ってみた・カバー・BGM などを除外
+    if (has_excluded_word($sn, $config['exclude_words'])) {
+        continue;
+    }
+    // 8分以上の動画は除外
+    if (duration_sec($v['contentDetails']['duration'] ?? '') >= $config['max_duration_sec']) {
         continue;
     }
     // ライブ配信・プレミア公開予定は除外

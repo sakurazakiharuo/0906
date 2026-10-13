@@ -10,6 +10,15 @@ return [
     // 検索キーワード
     'keywords' => ['オリジナル曲', 'オリジナルソング', 'オリジナル楽曲', 'MV', 'music video'],
 
+    // これらのキーワードでしかヒットしなかった動画は、説明欄にひらがながあるものだけ残す
+    'keywords_require_hiragana' => ['MV', 'music video'],
+
+    // タイトル・タグにこれらの語を含む動画は除外（大文字小文字は区別しない）
+    'exclude_words' => ['歌ってみた', '歌って見た', 'うたってみた', 'カバー', 'cover', 'BGM'],
+
+    // この秒数以上の動画は除外（8分 = 480秒）
+    'max_duration_sec' => 480,
+
     // 抽出条件
     'min_subscribers' => 10,
     'max_subscribers' => 300,
