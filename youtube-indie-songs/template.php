@@ -8,10 +8,11 @@ function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>新着インディー歌動画</title>
+<title>売れる前夜（YouTube未発掘シンガーランキング）</title>
 <style>
   body { font-family: system-ui, "Hiragino Sans", "Noto Sans JP", sans-serif; margin: 0; padding: 16px; background: #fafafa; color: #222; }
   h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  h1 .sub { display: block; font-size: .85rem; font-weight: normal; color: #666; margin-top: 2px; }
   .meta { color: #666; font-size: .85rem; margin-bottom: 16px; }
   .wrap { overflow-x: auto; }
   table { border-collapse: collapse; width: 100%; background: #fff; }
@@ -24,7 +25,7 @@ function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 </style>
 </head>
 <body>
-<h1>新着インディー歌動画</h1>
+<h1>売れる前夜<span class="sub">YouTube未発掘シンガーランキング</span></h1>
 <p class="meta">
   登録者 10〜300 人 / 3 日以内の投稿 / 再生数順　｜　最終更新: <?= h($updatedAt) ?>（<?= count($rows) ?> 件）
 </p>
