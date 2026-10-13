@@ -8,10 +8,11 @@ function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>最初の推しになる</title>
+<title>初期推し（YouTube歌動画低再生数リスト）</title>
 <style>
   body { font-family: system-ui, "Hiragino Sans", "Noto Sans JP", sans-serif; margin: 0; padding: 16px; background: #fafafa; color: #222; }
   h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  h1 .sub { display: block; font-size: .85rem; font-weight: normal; color: #666; margin-top: 2px; }
   .meta { color: #666; font-size: .85rem; margin-bottom: 16px; }
   .wrap { overflow-x: auto; }
   table { border-collapse: collapse; width: 100%; background: #fff; }
@@ -24,7 +25,7 @@ function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 </style>
 </head>
 <body>
-<h1>最初の推しになる</h1>
+<h1>初期推し<span class="sub">YouTube歌動画低再生数リスト</span></h1>
 <p class="meta">
   登録者 0〜300 人 / 3 日以内の投稿 / 再生数の少ない順　｜　最終更新: <?= h($updatedAt) ?>（<?= count($rows) ?> 件）
 </p>
