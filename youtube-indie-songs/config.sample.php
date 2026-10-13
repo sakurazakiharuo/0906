@@ -21,7 +21,7 @@ return [
     'max_duration_sec' => 480,
 
     // 抽出条件
-    'min_subscribers' => 10,
+    'min_subscribers' => 0,
     'max_subscribers' => 300,
     'days' => 3,
 

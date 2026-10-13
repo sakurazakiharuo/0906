@@ -1,7 +1,7 @@
 <?php
 /**
- * YouTube から「登録者 10〜300 人のチャンネルが直近 3 日以内に投稿した日本語の歌動画」を集め、
- * 再生数の降順で並べた静的 HTML を生成する。cron から毎朝 7 時に実行する想定。
+ * YouTube から「登録者 0〜300 人のチャンネルが直近 3 日以内に投稿した日本語の歌動画」を集め、
+ * 再生数の昇順で並べた静的 HTML を生成する。cron から毎朝 7 時に実行する想定。
  *
  *   /usr/local/bin/php /home/YOUR_ACCOUNT/youtube-indie-songs/fetch.php
  */
@@ -135,8 +135,8 @@ foreach ($videos as $v) {
     ];
 }
 
-// 5. 再生数の降順
-usort($rows, fn($a, $b) => $b['views'] <=> $a['views']);
+// 5. 再生数の昇順（少ない順）
+usort($rows, fn($a, $b) => $a['views'] <=> $b['views']);
 
 // 6. HTML を書き出す（一時ファイル → rename で差し替え、閲覧中に壊れたページを出さない）
 $updatedAt = date('Y-m-d H:i');
