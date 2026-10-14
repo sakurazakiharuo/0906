@@ -12,6 +12,20 @@ $config = require __DIR__ . '/config.php';
 $apiKey = $config['api_key'];
 require __DIR__ . '/functions.php';
 
+// 実行結果を fetch.log に追記する（cron の設定に関係なく、止まった理由を後から確認できるように）
+function log_line(string $msg): void
+{
+    $line = '[' . date('Y-m-d H:i:s') . '] ' . $msg . "\n";
+    echo $line;
+    file_put_contents(__DIR__ . '/fetch.log', $line, FILE_APPEND);
+}
+
+// 想定外のエラーで止まった場合もログに残す（この場合 HTML は更新されず前回のまま）
+set_exception_handler(function (Throwable $e) {
+    log_line('ERROR ' . $e->getMessage());
+    exit(1);
+});
+
 function api_get(string $endpoint, array $params): array
 {
     $url = 'https://www.googleapis.com/youtube/v3/' . $endpoint . '?' . http_build_query($params);
@@ -50,7 +64,13 @@ foreach ($config['keywords'] as $keyword) {
         if ($pageToken) {
             $params['pageToken'] = $pageToken;
         }
-        $res = api_get('search', $params);
+        try {
+            $res = api_get('search', $params);
+        } catch (RuntimeException $e) {
+            // 割り当て超過などで検索が失敗したら、それまでに集めた分で続行する
+            log_line('WARN search stopped (' . $keyword . ' p' . ($page + 1) . '): ' . preg_replace('/\s+/', ' ', substr($e->getMessage(), 0, 300)));
+            break 2;
+        }
         foreach ($res['items'] ?? [] as $item) {
             $videoIds[$item['id']['videoId']][] = $keyword;
         }
@@ -62,6 +82,10 @@ foreach ($config['keywords'] as $keyword) {
 }
 $hitKeywords = $videoIds;
 $videoIds = array_keys($videoIds);
+if (!$videoIds) {
+    log_line('ERROR no candidates found; HTML not updated');
+    exit(1);
+}
 
 // 2. 動画の詳細（再生数・言語）を取得（videos.list: 1 ユニット/50 件）
 $videos = [];
@@ -152,4 +176,4 @@ $tmp = $out . '.tmp';
 file_put_contents($tmp, $html);
 rename($tmp, $out);
 
-echo "[$updatedAt] candidates=" . count($videoIds) . " listed=" . count($rows) . "\n";
+log_line('OK candidates=' . count($videoIds) . ' listed=' . count($rows));
