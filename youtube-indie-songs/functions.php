@@ -46,3 +46,17 @@ function has_excluded_word(array $snippet, array $words): bool
 {
     return (bool)matched_words($snippet['title'] . ' ' . implode(' ', $snippet['tags'] ?? []), $words);
 }
+
+// タグ・ハッシュタグに AI 生成を示す語があるか（#AI, #AI音楽, #AIMusic, #suno など）
+// YouTube の「改変または合成されたコンテンツ」ラベルは API で取得できないため、タグで判定する
+function has_ai_tag(array $snippet): bool
+{
+    preg_match_all('/[#＃]([^\s#＃]+)/u', $snippet['title'] . ' ' . ($snippet['description'] ?? ''), $m);
+    foreach (array_merge($snippet['tags'] ?? [], $m[1]) as $tag) {
+        $tag = mb_strtolower(mb_convert_kana($tag, 'a', 'UTF-8'), 'UTF-8'); // 全角 ＡＩ → ai
+        if (preg_match('/(?<![a-z])ai(?:music|songs?|generated|vocals?|covers?|art|mv|pop|jpop)?(?![a-z])|suno|udio|生成ai|人工知能/u', $tag)) {
+            return true;
+        }
+    }
+    return false;
+}

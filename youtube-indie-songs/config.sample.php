@@ -29,6 +29,9 @@ return [
     // タイトル・タグにこれらの語を含む動画は除外（大文字小文字は区別しない）
     'exclude_words' => ['歌ってみた', '歌って見た', 'うたってみた', 'カバー', 'cover', 'BGM'],
 
+    // タグ・ハッシュタグに AI 生成を示す語（AI, AI音楽, AIMusic, suno など）がある動画を除外
+    'exclude_ai_tagged' => true,
+
     // この秒数以上の動画は除外（8分 = 480秒）
     'max_duration_sec' => 480,
 
