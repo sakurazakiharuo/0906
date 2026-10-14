@@ -23,19 +23,26 @@ function duration_sec(string $iso): int
     return $d->d * 86400 + $d->h * 3600 + $d->i * 60 + $d->s;
 }
 
-// タイトル・タグに除外語が含まれるか
-function has_excluded_word(array $snippet, array $words): bool
+// $text に含まれる $words を返す（大文字小文字は区別しない）
+function matched_words(string $text, array $words): array
 {
-    $text = mb_strtolower($snippet['title'] . ' ' . implode(' ', $snippet['tags'] ?? []), 'UTF-8');
-    foreach ($words as $w) {
-        $w = mb_strtolower($w, 'UTF-8');
+    $text = mb_strtolower($text, 'UTF-8');
+    $hits = [];
+    foreach ($words as $word) {
+        $w = mb_strtolower($word, 'UTF-8');
         // 英単語は単語単位で判定（"cover" が "discover" に誤反応しないように）
         $hit = preg_match('/^[a-z0-9 ]+$/', $w)
             ? preg_match('/(?<![a-z0-9])' . preg_quote($w, '/') . '(?![a-z0-9])/u', $text) === 1
             : mb_strpos($text, $w) !== false;
         if ($hit) {
-            return true;
+            $hits[] = $word;
         }
     }
-    return false;
+    return $hits;
+}
+
+// タイトル・タグに除外語が含まれるか
+function has_excluded_word(array $snippet, array $words): bool
+{
+    return (bool)matched_words($snippet['title'] . ' ' . implode(' ', $snippet['tags'] ?? []), $words);
 }

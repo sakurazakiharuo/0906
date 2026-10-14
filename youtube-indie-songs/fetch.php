@@ -1,9 +1,14 @@
 <?php
 /**
  * YouTube から「登録者 0〜300 人のチャンネルが直近 3 日以内に投稿した日本語の歌動画」を集め、
- * 再生数の昇順で並べた静的 HTML を生成する。cron から毎朝 7 時に実行する想定。
+ * 再生数の昇順で並べた静的 HTML を生成する。cron から毎日実行する想定。
  *
  *   /usr/local/bin/php /home/YOUR_ACCOUNT/youtube-indie-songs/fetch.php
+ *
+ * 候補動画の集め方は 2 通り:
+ *   A. キーワード検索（search.list。1 日 100 回の上限あり）
+ *   B. 記録済みチャンネルの新着動画を直接確認（playlistItems.list。検索の上限を使わない）
+ * 一度リストに載ったチャンネルは channels.json に記録され、次回から B でも確認される。
  */
 
 date_default_timezone_set('Asia/Tokyo');
@@ -11,6 +16,8 @@ date_default_timezone_set('Asia/Tokyo');
 $config = require __DIR__ . '/config.php';
 $apiKey = $config['api_key'];
 require __DIR__ . '/functions.php';
+
+const CHANNELS_FILE = __DIR__ . '/channels.json';
 
 // 実行結果を fetch.log に追記する（cron の設定に関係なく、止まった理由を後から確認できるように）
 function log_line(string $msg): void
@@ -43,9 +50,59 @@ function api_get(string $endpoint, array $params): array
     return json_decode($body, true);
 }
 
-// 1. キーワード検索で候補動画を集める（search.list: 100 ユニット/回）
-$publishedAfter = gmdate('Y-m-d\TH:i:s\Z', time() - $config['days'] * 86400);
-$videoIds = []; // videoId => ヒットしたキーワード一覧
+// 複数リクエストを並列に投げる（記録済みチャンネルが多くても短時間で終わるように）
+// 失敗したリクエストの結果は null
+function api_get_multi(string $endpoint, array $paramsList, int $concurrency = 10): array
+{
+    $results = [];
+    foreach (array_chunk($paramsList, $concurrency, true) as $batch) {
+        $mh = curl_multi_init();
+        $handles = [];
+        foreach ($batch as $key => $params) {
+            $ch = curl_init('https://www.googleapis.com/youtube/v3/' . $endpoint . '?' . http_build_query($params));
+            curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 30]);
+            curl_multi_add_handle($mh, $ch);
+            $handles[$key] = $ch;
+        }
+        do {
+            $status = curl_multi_exec($mh, $running);
+            if ($running) {
+                curl_multi_select($mh);
+            }
+        } while ($running && $status === CURLM_OK);
+        foreach ($handles as $key => $ch) {
+            $ok = curl_getinfo($ch, CURLINFO_HTTP_CODE) === 200;
+            $results[$key] = $ok ? json_decode(curl_multi_getcontent($ch), true) : null;
+            curl_multi_remove_handle($mh, $ch);
+            curl_close($ch);
+        }
+        curl_multi_close($mh);
+    }
+    return $results;
+}
+
+// channels.list で登録者数などを取得（1 ユニット/50 件）
+function fetch_channels(array $ids, string $apiKey): array
+{
+    $channels = [];
+    foreach (array_chunk(array_values(array_unique($ids)), 50) as $chunk) {
+        $res = api_get('channels', [
+            'key' => $apiKey,
+            'part' => 'snippet,statistics',
+            'id' => implode(',', $chunk),
+        ]);
+        foreach ($res['items'] ?? [] as $c) {
+            $channels[$c['id']] = $c;
+        }
+    }
+    return $channels;
+}
+
+$publishedAfterTs = time() - $config['days'] * 86400;
+$videoIds = []; // videoId => ヒットしたキーワード一覧（記録済みチャンネル経由は後で本文から判定）
+
+// 1. キーワード検索で候補動画を集める（search.list: 1 日 100 回まで）
+$musicOnly = $config['music_category_only_keywords'] ?? [];
 foreach ($config['keywords'] as $keyword) {
     $pageToken = null;
     for ($page = 0; $page < $config['pages_per_keyword']; $page++) {
@@ -54,13 +111,16 @@ foreach ($config['keywords'] as $keyword) {
             'part' => 'snippet',
             'q' => $keyword,
             'type' => 'video',
-            'videoCategoryId' => '10', // Music
-            'publishedAfter' => $publishedAfter,
+            'publishedAfter' => gmdate('Y-m-d\TH:i:s\Z', $publishedAfterTs),
             'order' => 'date',
             'regionCode' => 'JP',
             'relevanceLanguage' => 'ja',
             'maxResults' => 50,
         ];
+        // 「MV」「music video」は無関係な動画が多いので音楽カテゴリに限定する
+        if (in_array($keyword, $musicOnly, true)) {
+            $params['videoCategoryId'] = '10';
+        }
         if ($pageToken) {
             $params['pageToken'] = $pageToken;
         }
@@ -80,6 +140,53 @@ foreach ($config['keywords'] as $keyword) {
         }
     }
 }
+$searchCount = count($videoIds);
+
+// 2. 記録済みチャンネル＋手動登録チャンネルの新着動画を集める
+//    （playlistItems.list: 1 ユニット/チャンネル。検索の 1 日 100 回には含まれない）
+$tracked = is_file(CHANNELS_FILE) ? (json_decode(file_get_contents(CHANNELS_FILE), true) ?: []) : [];
+$manual = $config['watch_channels'] ?? [];
+foreach ($manual as $id) {
+    $tracked[$id] = ($tracked[$id] ?? []) + ['title' => '', 'source' => 'manual', 'added' => date('Y-m-d')];
+    $tracked[$id]['source'] = 'manual';
+}
+
+// 登録者数が上限を超えた・非公開になった・消えたチャンネルは記録から外す（手動登録は残す）
+$trackedInfo = $tracked ? fetch_channels(array_keys($tracked), $apiKey) : [];
+foreach (array_keys($tracked) as $id) {
+    if ($tracked[$id]['source'] === 'manual') {
+        continue;
+    }
+    $info = $trackedInfo[$id] ?? null;
+    if (!$info || !empty($info['statistics']['hiddenSubscriberCount'])
+        || (int)($info['statistics']['subscriberCount'] ?? 0) > $config['max_subscribers']) {
+        unset($tracked[$id]);
+    }
+}
+
+// 各チャンネルの「アップロード動画」プレイリスト（UC... → UU...）から新着を取得
+$playlistParams = [];
+foreach (array_keys($tracked) as $id) {
+    if (strpos($id, 'UC') === 0) {
+        $playlistParams[$id] = [
+            'key' => $apiKey,
+            'part' => 'contentDetails',
+            'playlistId' => 'UU' . substr($id, 2),
+            'maxResults' => 10,
+        ];
+    }
+}
+$watchCount = 0;
+foreach (api_get_multi('playlistItems', $playlistParams) as $res) {
+    foreach ($res['items'] ?? [] as $item) {
+        $published = strtotime($item['contentDetails']['videoPublishedAt'] ?? '');
+        if ($published && $published >= $publishedAfterTs) {
+            $videoIds[$item['contentDetails']['videoId']] ??= [];
+            $watchCount++;
+        }
+    }
+}
+
 $hitKeywords = $videoIds;
 $videoIds = array_keys($videoIds);
 if (!$videoIds) {
@@ -87,7 +194,7 @@ if (!$videoIds) {
     exit(1);
 }
 
-// 2. 動画の詳細（再生数・言語）を取得（videos.list: 1 ユニット/50 件）
+// 3. 動画の詳細（再生数・言語・再生時間）を取得（videos.list: 1 ユニット/50 件）
 $videos = [];
 foreach (array_chunk($videoIds, 50) as $chunk) {
     $res = api_get('videos', [
@@ -100,21 +207,11 @@ foreach (array_chunk($videoIds, 50) as $chunk) {
     }
 }
 
-// 3. チャンネルの登録者数を取得（channels.list: 1 ユニット/50 件）
-$channelIds = array_values(array_unique(array_map(fn($v) => $v['snippet']['channelId'], $videos)));
-$channels = [];
-foreach (array_chunk($channelIds, 50) as $chunk) {
-    $res = api_get('channels', [
-        'key' => $apiKey,
-        'part' => 'snippet,statistics',
-        'id' => implode(',', $chunk),
-    ]);
-    foreach ($res['items'] ?? [] as $c) {
-        $channels[$c['id']] = $c;
-    }
-}
+// 4. チャンネルの登録者数を取得（記録済みチャンネルは取得済みの情報を使う）
+$channelIds = array_map(fn($v) => $v['snippet']['channelId'], $videos);
+$channels = $trackedInfo + fetch_channels(array_diff($channelIds, array_keys($trackedInfo)), $apiKey);
 
-// 4. 条件で絞り込み
+// 5. 条件で絞り込み
 $rows = [];
 foreach ($videos as $v) {
     $sn = $v['snippet'];
@@ -131,9 +228,16 @@ foreach ($videos as $v) {
     if (strpos($lang, 'ja') !== 0 && !has_japanese($sn['title'] . ' ' . ($sn['description'] ?? ''))) {
         continue;
     }
+    // 記録済みチャンネル経由の動画は、タイトル・タグ・説明欄にキーワードがあるものだけ（雑談動画などを除く）
+    $hits = $hitKeywords[$v['id']] ?: matched_words(
+        $sn['title'] . ' ' . implode(' ', $sn['tags'] ?? []) . ' ' . ($sn['description'] ?? ''),
+        $config['keywords']
+    );
+    if (!$hits) {
+        continue;
+    }
     // 「MV」「music video」でしかヒットしていない動画は、説明欄にひらがなが必要
-    $onlyLooseKeywords = !array_diff($hitKeywords[$v['id']] ?? [], $config['keywords_require_hiragana']);
-    if ($onlyLooseKeywords && !has_hiragana($sn['description'] ?? '')) {
+    if (!array_diff($hits, $config['keywords_require_hiragana']) && !has_hiragana($sn['description'] ?? '')) {
         continue;
     }
     // 歌ってみた・カバー・BGM などを除外
@@ -157,12 +261,28 @@ foreach ($videos as $v) {
         'views' => (int)($v['statistics']['viewCount'] ?? 0),
         'published' => date('Y-m-d H:i', strtotime($sn['publishedAt'])),
     ];
+
+    // リストに載ったチャンネルを記録（次回から検索に頼らず新着を確認する）
+    $id = $sn['channelId'];
+    $tracked[$id] = ($tracked[$id] ?? ['source' => 'search', 'added' => date('Y-m-d')]);
+    $tracked[$id]['title'] = $sn['channelTitle'];
+    $tracked[$id]['last_listed'] = date('Y-m-d');
 }
 
-// 5. 再生数の昇順（少ない順）
+// 記録数の上限を超えたら、最後にリストに載った日が古いものから外す（手動登録は残す）
+$max = $config['max_tracked_channels'] ?? 3000;
+if (count($tracked) > $max) {
+    uasort($tracked, fn($a, $b) => ($b['source'] === 'manual') <=> ($a['source'] === 'manual')
+        ?: strcmp($b['last_listed'] ?? '', $a['last_listed'] ?? ''));
+    $tracked = array_slice($tracked, 0, $max, true);
+}
+file_put_contents(CHANNELS_FILE . '.tmp', json_encode($tracked, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+rename(CHANNELS_FILE . '.tmp', CHANNELS_FILE);
+
+// 6. 再生数の昇順（少ない順）
 usort($rows, fn($a, $b) => $a['views'] <=> $b['views']);
 
-// 6. HTML を書き出す（一時ファイル → rename で差し替え、閲覧中に壊れたページを出さない）
+// 7. HTML を書き出す（一時ファイル → rename で差し替え、閲覧中に壊れたページを出さない）
 $updatedAt = date('Y-m-d H:i');
 ob_start();
 require __DIR__ . '/template.php';
@@ -176,4 +296,5 @@ $tmp = $out . '.tmp';
 file_put_contents($tmp, $html);
 rename($tmp, $out);
 
-log_line('OK candidates=' . count($videoIds) . ' listed=' . count($rows));
+log_line(sprintf('OK search=%d tracked_channels=%d tracked_new_videos=%d listed=%d',
+    $searchCount, count($tracked), $watchCount, count($rows)));

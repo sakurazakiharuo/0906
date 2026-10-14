@@ -11,6 +11,18 @@ return [
     // 検索キーワード
     'keywords' => ['オリジナル曲', 'オリジナルソング', 'オリジナル楽曲', 'MV', 'music video'],
 
+    // これらのキーワードは音楽カテゴリの動画だけを検索する（それ以外はカテゴリを問わない）
+    'music_category_only_keywords' => ['MV', 'music video'],
+
+    // 毎回新着を確認するチャンネル（チャンネルID: UC で始まる文字列）
+    // リストに載ったチャンネルは channels.json に自動で記録されるので、ここには必ず確認したいものだけ書く
+    'watch_channels' => [
+        'UCnn0hwrrHt1VBL0tbCmwodQ', // 蘇芳れな(SUOU RENA)
+    ],
+
+    // 自動で記録するチャンネル数の上限（1 チャンネルにつき 1 ユニット/回。1 日の上限 10,000 ユニット）
+    'max_tracked_channels' => 3000,
+
     // これらのキーワードでしかヒットしなかった動画は、説明欄にひらがながあるものだけ残す
     'keywords_require_hiragana' => ['MV', 'music video'],
 
