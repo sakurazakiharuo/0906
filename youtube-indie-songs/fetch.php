@@ -277,6 +277,7 @@ foreach ($videos as $v) {
                 'channel_created' => strtotime($ch['snippet']['publishedAt'] ?? 'now'),
                 'score' => $score,
                 'reasons' => $reasons,
+                'duration_sec' => duration_sec($v['contentDetails']['duration'] ?? ''),
                 // X のアカウント（動画説明欄 → チャンネル説明文の順に探す）
                 'x_handle' => find_x_handle($sn['description'] ?? '') ?? find_x_handle($ch['snippet']['description'] ?? ''),
             ];
@@ -372,7 +373,10 @@ render_to('template.php', $config['output_html'], $vars);
 
 // X 投稿用ページ（検索エンジンに載らないよう noindex。トップページからはリンクしない）
 if (!empty($config['output_post_html'])) {
-    render_to('template_post.php', $config['output_post_html'], $vars);
+    // 投稿用ページでは短すぎる動画（既定 40 秒以下）を除く
+    $minSec = $config['post_min_duration_sec'] ?? 40;
+    $postVars = ['pickup' => array_values(array_filter($pickup, fn($p) => $p['duration_sec'] > $minSec))] + $vars;
+    render_to('template_post.php', $config['output_post_html'], $postVars);
 }
 
 log_line(sprintf('OK search=%d tracked_channels=%d tracked_new_videos=%d listed=%d pickup=%d',
