@@ -274,7 +274,10 @@ foreach ($videos as $v) {
         'url' => 'https://www.youtube.com/watch?v=' . $v['id'],
         'views' => (int)($v['statistics']['viewCount'] ?? 0),
         'published' => date('Y-m-d H:i', strtotime($sn['publishedAt'])),
+        // X のアカウント（動画説明欄 → チャンネル説明文の順に探す）
+        'x_handle' => find_x_handle($sn['description'] ?? '') ?? find_x_handle($ch['snippet']['description'] ?? ''),
     ];
+    $row['post_text'] = build_list_post_text($row);
     $rows[] = $row;
 
     // ピックアップ候補（登録者が少なく、作りこみの点数が基準以上）
@@ -287,8 +290,6 @@ foreach ($videos as $v) {
                 'score' => $score,
                 'reasons' => $reasons,
                 'duration_sec' => duration_sec($v['contentDetails']['duration'] ?? ''),
-                // X のアカウント（動画説明欄 → チャンネル説明文の順に探す）
-                'x_handle' => find_x_handle($sn['description'] ?? '') ?? find_x_handle($ch['snippet']['description'] ?? ''),
             ];
         }
     }
@@ -359,7 +360,17 @@ foreach ($pickup as &$p) {
 }
 unset($p);
 
-// 7. 再生数の昇順（少ない順）
+// 7. 芽吹き: 再生数の多い順トップ 10
+$mebuki = $rows;
+usort($mebuki, fn($a, $b) => $b['views'] <=> $a['views']);
+$mebuki = array_slice($mebuki, 0, $config['mebuki_limit'] ?? 10);
+foreach ($mebuki as $i => &$m) {
+    $m['rank'] = $i + 1;
+    $m['post_text'] = build_mebuki_post_text($m, $i + 1);
+}
+unset($m);
+
+// 新着リストは再生数の昇順（少ない順）
 usort($rows, fn($a, $b) => $a['views'] <=> $b['views']);
 
 // 8. HTML を書き出す（一時ファイル → rename で差し替え、閲覧中に壊れたページを出さない）
@@ -392,7 +403,7 @@ function write_exclude_endpoint(array $config): string
 }
 
 $updatedAt = date('Y-m-d H:i');
-$vars = compact('rows', 'pickup', 'config', 'updatedAt');
+$vars = compact('rows', 'pickup', 'mebuki', 'config', 'updatedAt');
 render_to('template.php', $config['output_html'], $vars);
 
 // X 投稿用ページ（検索エンジンに載らないよう noindex。トップページからはリンクしない）

@@ -163,15 +163,15 @@ function x_length(string $text): int
     return $len;
 }
 
-// ピックアップ 1 件分の投稿文（280 字に収まるようにタイトルを切り詰める）
-function build_post_text(array $p): string
+// X の投稿文を組み立てる（280 字に収まるようにタイトルを切り詰める）
+//   $header: 1 行目（null なら付けない）、$note: アーティスト行の次に入れる 1 行（'' なら付けない）
+function compose_post(?string $header, array $p, string $note = ''): string
 {
-    $artist = $p['artist'] . ($p['x_handle'] ? ' @' . $p['x_handle'] : '');
-    $highlights = implode('・', array_map(fn($r) => preg_replace('/（.*）$/u', '', $r), array_slice($p['reasons'], 0, 3)));
-    $make = fn($title) => "🎤 初期推しピックアップ\n"
+    $artist = $p['artist'] . (!empty($p['x_handle']) ? ' @' . $p['x_handle'] : '');
+    $make = fn($title) => ($header !== null ? "{$header}\n" : '')
         . "「{$title}」\n"
         . "{$artist}（登録者{$p['subscribers']}人）\n"
-        . ($highlights !== '' ? "{$highlights}\n" : '')
+        . ($note !== '' ? "{$note}\n" : '')
         . "{$p['url']}\n"
         . '#初期推し #オリジナル曲';
     $title = $p['title'];
@@ -179,6 +179,25 @@ function build_post_text(array $p): string
         $title = mb_substr($title, 0, mb_strlen($title) - 2) . '…';
     }
     return $make($title);
+}
+
+// ピックアップの投稿文
+function build_post_text(array $p): string
+{
+    $highlights = implode('・', array_map(fn($r) => preg_replace('/（.*）$/u', '', $r), array_slice($p['reasons'], 0, 3)));
+    return compose_post('🎤 初期推しピックアップ', $p, $highlights);
+}
+
+// 芽吹き（再生数ランキング）の投稿文
+function build_mebuki_post_text(array $p, int $rank): string
+{
+    return compose_post("🌱 芽吹き｜再生数ランキング {$rank}位", $p, '再生 ' . number_format($p['views']) . '回');
+}
+
+// 新着リストの投稿文（ピックアップ・芽吹きとは書かない）
+function build_list_post_text(array $p): string
+{
+    return compose_post(null, $p);
 }
 
 // X の投稿画面を、投稿文を入れた状態で開く URL
