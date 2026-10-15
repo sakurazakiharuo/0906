@@ -274,7 +274,6 @@ foreach ($videos as $v) {
         if ($score >= $config['pickup_min_score']) {
             $pickupCandidates[] = $row + [
                 'channel_id' => $sn['channelId'],
-                'channel_videos' => (int)($ch['statistics']['videoCount'] ?? 0),
                 'channel_created' => strtotime($ch['snippet']['publishedAt'] ?? 'now'),
                 'score' => $score,
                 'reasons' => $reasons,
@@ -302,21 +301,39 @@ file_put_contents(CHANNELS_FILE . '.tmp', json_encode($tracked, JSON_PRETTY_PRIN
 rename(CHANNELS_FILE . '.tmp', CHANNELS_FILE);
 
 // 6. ピックアップ: 量産型のチャンネルを除き、作りこみの点数が高い順に選ぶ
-//    量産型の判定 = 直近 30 日の投稿数が多い、または開設以来の平均投稿ペースが速い
-$recentUploads = [];
+//    量産型の判定は「歌動画」だけで数える（雑談・ゲームなど歌以外の投稿は数えない）
+//      - 直近 30 日の歌動画が多い
+//      - 歌動画の平均投稿ペース（本/週）が速い … 最新 50 本の範囲で計算
+//    歌動画かどうかはタイトル・説明欄の語（オリジナル曲・MV・作詞・作曲 など）で判定
+$songStats = [];
 $params = [];
 foreach (array_unique(array_column($pickupCandidates, 'channel_id')) as $id) {
-    $params[$id] = ['key' => $apiKey, 'part' => 'contentDetails', 'playlistId' => 'UU' . substr($id, 2), 'maxResults' => 50];
+    $params[$id] = ['key' => $apiKey, 'part' => 'snippet,contentDetails', 'playlistId' => 'UU' . substr($id, 2), 'maxResults' => 50];
 }
 foreach (api_get_multi('playlistItems', $params) as $id => $res) {
-    $recentUploads[$id] = count(array_filter($res['items'] ?? [],
-        fn($i) => strtotime($i['contentDetails']['videoPublishedAt'] ?? '') >= time() - 30 * 86400));
+    $items = $res['items'] ?? [];
+    $songTimes = [];
+    $oldest = time();
+    foreach ($items as $i) {
+        $t = strtotime($i['contentDetails']['videoPublishedAt'] ?? $i['snippet']['publishedAt'] ?? '') ?: time();
+        $oldest = min($oldest, $t);
+        if (matched_words($i['snippet']['title'] . ' ' . ($i['snippet']['description'] ?? ''), $config['song_words'])) {
+            $songTimes[] = $t;
+        }
+    }
+    $songStats[$id] = [
+        'songs_30d' => count(array_filter($songTimes, fn($t) => $t >= time() - 30 * 86400)),
+        'songs' => count($songTimes),
+        // 50 本未満ならチャンネル開設から、50 本ちょうどなら最古の 1 本からの期間で割る
+        'span_from' => count($items) < 50 ? null : $oldest,
+    ];
 }
 $pickup = [];
 foreach ($pickupCandidates as $c) {
-    $ageDays = max(30, (time() - $c['channel_created']) / 86400);
-    $perWeek = $c['channel_videos'] / $ageDays * 7;
-    if (($recentUploads[$c['channel_id']] ?? 0) > $config['pickup_max_uploads_30d'] || $perWeek > $config['pickup_max_uploads_per_week']) {
+    $st = $songStats[$c['channel_id']] ?? ['songs_30d' => 0, 'songs' => 0, 'span_from' => null];
+    $spanDays = max(30, (time() - ($st['span_from'] ?? $c['channel_created'])) / 86400);
+    $songsPerWeek = $st['songs'] / $spanDays * 7;
+    if ($st['songs_30d'] > $config['pickup_max_uploads_30d'] || $songsPerWeek > $config['pickup_max_uploads_per_week']) {
         continue;
     }
     // 1 チャンネル 1 本まで（点数が高いものを優先）
