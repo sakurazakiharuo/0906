@@ -53,19 +53,6 @@ function has_excluded_word(array $snippet, array $words): bool
     return (bool)matched_words($snippet['title'] . ' ' . implode(' ', $snippet['tags'] ?? []), $words);
 }
 
-// タグ・ハッシュタグに AI 生成を示す語があるか（#AI, #AI音楽, #AIMusic, #suno など）
-// YouTube の「改変または合成されたコンテンツ」ラベルは API で取得できないため、タグで判定する
-function has_ai_tag(array $snippet): bool
-{
-    preg_match_all('/[#＃]([^\s#＃]+)/u', $snippet['title'] . ' ' . ($snippet['description'] ?? ''), $m);
-    foreach (array_merge($snippet['tags'] ?? [], $m[1]) as $tag) {
-        $tag = mb_strtolower(mb_convert_kana($tag, 'a', 'UTF-8'), 'UTF-8'); // 全角 ＡＩ → ai
-        if (preg_match('/(?<![a-z])ai(?:music|songs?|generated|vocals?|covers?|art|mv|pop|jpop)?(?![a-z])|suno|udio|生成ai|人工知能/u', $tag)) {
-            return true;
-        }
-    }
-    return false;
-}
 
 // 「作りこまれている」度合いを動画の情報から推定する（再生・視聴はできないので説明欄や長さなどの手がかりで判定）
 // 戻り値: [点数, 理由の一覧]
@@ -142,12 +129,6 @@ function craft_score(array $video): array
     return [$score, $reasons];
 }
 
-// タイトル・説明欄のどこかで AI 生成に触れているか（ピックアップ用。タグ判定より厳しい）
-function mentions_ai(array $snippet): bool
-{
-    $text = mb_strtolower(mb_convert_kana($snippet['title'] . ' ' . ($snippet['description'] ?? ''), 'a', 'UTF-8'), 'UTF-8');
-    return preg_match('/(?<![a-z])ai(?![a-z])|suno|udio|生成ai|人工知能/u', $text) === 1;
-}
 
 // 説明文から X（旧 Twitter）のアカウントを探す。見つからなければ null
 //   x.com/xxx・twitter.com/xxx の URL、または「X: @xxx」「Twitter：@xxx」「𝕏 @xxx」の書き方に対応
@@ -204,4 +185,40 @@ function build_post_text(array $p): string
 function x_intent_url(string $text): string
 {
     return 'https://x.com/intent/post?text=' . rawurlencode($text);
+}
+
+// AI 生成を示す語のパターン（小文字化・半角化した文字列に使う）
+//   - 単独の "ai"（AI作曲, AI☆, #AI など。aiko・Aimer・Haiku のような語の一部は対象外）
+//   - "ai" + 英単語（AIMusic, AIgenerated, AIcover, AIsongs, AImusicvideo など）
+//   - AI 音楽・画像・動画の生成サービス名（suno, udio, mureka, midjourney など）
+function ai_regex(): string
+{
+    return '/(?<![a-z])ai(?![a-z])'
+        . '|(?<![a-z])ai(?:music|song|generat|vocal|voice|cover|art|mv|pop|jpop|rock|singer|idol|girl|boy|anime|video|image|illust|creat|made|compos|produc|band|beat|lofi|ballad|edm|track|tune|lyric|sing)'
+        . '|suno|udio|mureka|riffusion|soundraw|boomy|aiva(?![a-z])|midjourney|nijijourney|stable\s*diffusion|dall-?e|chatgpt|(?<![a-z])gpt|(?<![a-z])sora(?![a-z])|kling|生成ai|ai生成|人工知能|えーあい/u';
+}
+
+function text_has_ai(string $text): bool
+{
+    $text = mb_strtolower(mb_convert_kana($text, 'a', 'UTF-8'), 'UTF-8'); // 全角 ＡＩ → ai
+    return preg_match(ai_regex(), $text) === 1;
+}
+
+// タグ・ハッシュタグに AI 生成を示す語があるか（#AI, #AI音楽, #AIMusic, #suno など）
+// YouTube の「改変または合成されたコンテンツ」ラベルは API で取得できないため、タグで判定する
+function has_ai_tag(array $snippet): bool
+{
+    preg_match_all('/[#＃]([^\s#＃]+)/u', $snippet['title'] . ' ' . ($snippet['description'] ?? ''), $m);
+    foreach (array_merge($snippet['tags'] ?? [], $m[1]) as $tag) {
+        if (text_has_ai($tag)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// タイトル・説明欄・タグのどこかで AI 生成に触れているか（ピックアップ用。タグ判定より厳しい）
+function mentions_ai(array $snippet): bool
+{
+    return text_has_ai($snippet['title'] . ' ' . ($snippet['description'] ?? '') . ' ' . implode(' ', $snippet['tags'] ?? []));
 }

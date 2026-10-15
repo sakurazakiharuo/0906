@@ -245,8 +245,9 @@ foreach ($videos as $v) {
     if (has_excluded_word($sn, $config['exclude_words'])) {
         continue;
     }
-    // AI 生成のタグ・ハッシュタグ（#AI, #AI音楽, #suno など）が付いた動画は除外
-    if (!empty($config['exclude_ai_tagged']) && has_ai_tag($sn)) {
+    // AI 生成のタグ・ハッシュタグ（#AI, #AI音楽, #suno など）が付いた動画、
+    // チャンネル名に AI が入っている動画は除外（config に項目がなくても既定で除外する）
+    if (($config['exclude_ai_tagged'] ?? true) && (has_ai_tag($sn) || text_has_ai($sn['channelTitle']))) {
         continue;
     }
     // 8分以上の動画は除外
