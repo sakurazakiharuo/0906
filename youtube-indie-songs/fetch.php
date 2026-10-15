@@ -213,6 +213,7 @@ $channels = $trackedInfo + fetch_channels(array_diff($channelIds, array_keys($tr
 
 // 5. 条件で絞り込み
 $rows = [];
+$pickupCandidates = [];
 foreach ($videos as $v) {
     $sn = $v['snippet'];
     $ch = $channels[$sn['channelId']] ?? null;
@@ -256,7 +257,7 @@ foreach ($videos as $v) {
     if (($sn['liveBroadcastContent'] ?? 'none') !== 'none') {
         continue;
     }
-    $rows[] = [
+    $row = [
         'artist' => $sn['channelTitle'],
         'channel_url' => 'https://www.youtube.com/channel/' . $sn['channelId'],
         'subscribers' => $subs,
@@ -265,6 +266,21 @@ foreach ($videos as $v) {
         'views' => (int)($v['statistics']['viewCount'] ?? 0),
         'published' => date('Y-m-d H:i', strtotime($sn['publishedAt'])),
     ];
+    $rows[] = $row;
+
+    // ピックアップ候補（登録者が少なく、作りこみの点数が基準以上）
+    if ($subs <= $config['pickup_max_subscribers'] && !mentions_ai($sn)) {
+        [$score, $reasons] = craft_score($v);
+        if ($score >= $config['pickup_min_score']) {
+            $pickupCandidates[] = $row + [
+                'channel_id' => $sn['channelId'],
+                'channel_videos' => (int)($ch['statistics']['videoCount'] ?? 0),
+                'channel_created' => strtotime($ch['snippet']['publishedAt'] ?? 'now'),
+                'score' => $score,
+                'reasons' => $reasons,
+            ];
+        }
+    }
 
     // リストに載ったチャンネルを記録（次回から検索に頼らず新着を確認する）
     $id = $sn['channelId'];
@@ -283,10 +299,37 @@ if (count($tracked) > $max) {
 file_put_contents(CHANNELS_FILE . '.tmp', json_encode($tracked, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 rename(CHANNELS_FILE . '.tmp', CHANNELS_FILE);
 
-// 6. 再生数の昇順（少ない順）
+// 6. ピックアップ: 量産型のチャンネルを除き、作りこみの点数が高い順に選ぶ
+//    量産型の判定 = 直近 30 日の投稿数が多い、または開設以来の平均投稿ペースが速い
+$recentUploads = [];
+$params = [];
+foreach (array_unique(array_column($pickupCandidates, 'channel_id')) as $id) {
+    $params[$id] = ['key' => $apiKey, 'part' => 'contentDetails', 'playlistId' => 'UU' . substr($id, 2), 'maxResults' => 50];
+}
+foreach (api_get_multi('playlistItems', $params) as $id => $res) {
+    $recentUploads[$id] = count(array_filter($res['items'] ?? [],
+        fn($i) => strtotime($i['contentDetails']['videoPublishedAt'] ?? '') >= time() - 30 * 86400));
+}
+$pickup = [];
+foreach ($pickupCandidates as $c) {
+    $ageDays = max(30, (time() - $c['channel_created']) / 86400);
+    $perWeek = $c['channel_videos'] / $ageDays * 7;
+    if (($recentUploads[$c['channel_id']] ?? 0) > $config['pickup_max_uploads_30d'] || $perWeek > $config['pickup_max_uploads_per_week']) {
+        continue;
+    }
+    // 1 チャンネル 1 本まで（点数が高いものを優先）
+    if (isset($pickup[$c['channel_id']]) && $pickup[$c['channel_id']]['score'] >= $c['score']) {
+        continue;
+    }
+    $pickup[$c['channel_id']] = $c;
+}
+usort($pickup, fn($a, $b) => $b['score'] <=> $a['score'] ?: $a['views'] <=> $b['views']);
+$pickup = array_slice($pickup, 0, $config['pickup_limit']);
+
+// 7. 再生数の昇順（少ない順）
 usort($rows, fn($a, $b) => $a['views'] <=> $b['views']);
 
-// 7. HTML を書き出す（一時ファイル → rename で差し替え、閲覧中に壊れたページを出さない）
+// 8. HTML を書き出す（一時ファイル → rename で差し替え、閲覧中に壊れたページを出さない）
 $updatedAt = date('Y-m-d H:i');
 ob_start();
 require __DIR__ . '/template.php';
@@ -300,5 +343,5 @@ $tmp = $out . '.tmp';
 file_put_contents($tmp, $html);
 rename($tmp, $out);
 
-log_line(sprintf('OK search=%d tracked_channels=%d tracked_new_videos=%d listed=%d',
-    $searchCount, count($tracked), $watchCount, count($rows)));
+log_line(sprintf('OK search=%d tracked_channels=%d tracked_new_videos=%d listed=%d pickup=%d',
+    $searchCount, count($tracked), $watchCount, count($rows), count($pickup)));

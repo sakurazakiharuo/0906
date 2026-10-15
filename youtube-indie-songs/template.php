@@ -22,6 +22,14 @@ function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
   a { color: #c00; text-decoration: none; }
   a:hover { text-decoration: underline; }
   .empty { padding: 24px; text-align: center; color: #888; }
+  h2 { font-size: 1.1rem; margin: 24px 0 4px; }
+  .note { color: #666; font-size: .8rem; margin: 0 0 10px; }
+  .picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-bottom: 8px; }
+  .pick { background: #fff; border: 1px solid #eee; border-radius: 8px; padding: 12px; }
+  .pick .t { font-weight: bold; display: block; margin-bottom: 4px; }
+  .pick .a { font-size: .85rem; color: #444; }
+  .pick .s { font-size: .8rem; color: #666; margin: 4px 0 6px; }
+  .tag { display: inline-block; font-size: .72rem; background: #fdecec; color: #a00; border-radius: 4px; padding: 1px 6px; margin: 2px 4px 0 0; }
 </style>
 </head>
 <body>
@@ -29,6 +37,22 @@ function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 <p class="meta">
   登録者 0〜300 人 / 3 日以内の投稿 / 再生数の少ない順　｜　最終更新: <?= h($updatedAt) ?>（<?= count($rows) ?> 件）
 </p>
+<?php if (!empty($pickup)): ?>
+<h2>ピックアップ</h2>
+<p class="note">登録者 <?= h($config['pickup_max_subscribers']) ?> 人以下・投稿ペースが量産型でないチャンネルから、クレジットや歌詞・MV など作りこみの手がかりが多い動画を自動で選んでいます。</p>
+<div class="picks">
+<?php foreach ($pickup as $p): ?>
+  <div class="pick">
+    <a class="t" href="<?= h($p['url']) ?>" target="_blank" rel="noopener"><?= h($p['title']) ?></a>
+    <a class="a" href="<?= h($p['channel_url']) ?>" target="_blank" rel="noopener"><?= h($p['artist']) ?></a>
+    <div class="s">登録者 <?= number_format($p['subscribers']) ?> 人 ・ 再生 <?= number_format($p['views']) ?> 回 ・ <?= h($p['published']) ?></div>
+    <?php foreach ($p['reasons'] as $r): ?><span class="tag"><?= h($r) ?></span><?php endforeach; ?>
+  </div>
+<?php endforeach; ?>
+</div>
+<?php endif; ?>
+
+<h2>新着リスト</h2>
 <div class="wrap">
 <table>
   <thead>

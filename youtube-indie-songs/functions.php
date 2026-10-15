@@ -60,3 +60,85 @@ function has_ai_tag(array $snippet): bool
     }
     return false;
 }
+
+// 「作りこまれている」度合いを動画の情報から推定する（再生・視聴はできないので説明欄や長さなどの手がかりで判定）
+// 戻り値: [点数, 理由の一覧]
+function craft_score(array $video): array
+{
+    $sn = $video['snippet'];
+    $desc = $sn['description'] ?? '';
+    $text = mb_strtolower($sn['title'] . "\n" . $desc, 'UTF-8');
+    $score = 0;
+    $reasons = [];
+
+    // 説明欄のクレジット（作詞・作曲・編曲・歌・映像・イラスト・ミックス・演奏）の種類数
+    $roles = [
+        '作詞' => '作詞|lyrics?\s*[:：]|詞\s*[:：]',
+        '作曲' => '作曲|compose[rd]?|music\s*[:：]|曲\s*[:：]',
+        '編曲' => '編曲|arrange',
+        '歌' => 'vocal|ボーカル|歌唱|vo\.|歌\s*[:：]',
+        '映像' => '映像|動画制作|movie|撮影|mv\s*[:：]|video\s*[:：]|監督|director',
+        'イラスト' => 'イラスト|illust|絵\s*[:：]|アニメーション|animation',
+        'ミックス' => 'mix|ミックス|マスタリング|master|録音|rec\s*[:：]|エンジニア',
+        '演奏' => 'guitar|ギター|bass|ベース|drums?|ドラム|piano|ピアノ|keyboard|strings',
+    ];
+    $found = [];
+    foreach ($roles as $name => $re) {
+        if (preg_match('/' . $re . '/u', mb_strtolower($desc, 'UTF-8'))) {
+            $found[] = $name;
+        }
+    }
+    if (count($found) >= 4) {
+        $score += 2;
+        $reasons[] = 'クレジット充実（' . implode('・', $found) . '）';
+    } elseif (count($found) >= 2) {
+        $score += 1;
+        $reasons[] = 'クレジットあり（' . implode('・', $found) . '）';
+    }
+
+    // 説明欄に歌詞が載っている（日本語の短い行が 8 行以上）
+    $lyricLines = 0;
+    foreach (preg_split('/\R/u', $desc) as $line) {
+        $line = trim($line);
+        if ($line !== '' && mb_strlen($line) <= 40 && has_japanese($line) && !preg_match('/https?:|[:：]|#/u', $line)) {
+            $lyricLines++;
+        }
+    }
+    if ($lyricLines >= 8) {
+        $score += 1;
+        $reasons[] = '歌詞掲載';
+    }
+
+    // 1 曲まるごとの長さ（2〜8 分）
+    $sec = duration_sec($video['contentDetails']['duration'] ?? '');
+    if ($sec >= 120) {
+        $score += 1;
+        $reasons[] = 'フル尺 ' . intdiv($sec, 60) . '分' . ($sec % 60) . '秒';
+    }
+
+    // MV・リリックビデオとして作られている
+    if (preg_match('/(?<![a-z])(mv|music\s*video|lyric\s*video|official)(?![a-z])|ミュージックビデオ|リリックビデオ/u', mb_strtolower($sn['title'], 'UTF-8'))) {
+        $score += 1;
+        $reasons[] = 'MV';
+    }
+
+    // 説明欄が丁寧（300 文字以上）
+    if (mb_strlen($desc) >= 300) {
+        $score += 1;
+        $reasons[] = '説明文が丁寧';
+    }
+
+    // ショート動画（切り抜き・宣伝）は減点
+    if ($sec < 60 || strpos($text, '#shorts') !== false) {
+        $score -= 2;
+    }
+
+    return [$score, $reasons];
+}
+
+// タイトル・説明欄のどこかで AI 生成に触れているか（ピックアップ用。タグ判定より厳しい）
+function mentions_ai(array $snippet): bool
+{
+    $text = mb_strtolower(mb_convert_kana($snippet['title'] . ' ' . ($snippet['description'] ?? ''), 'a', 'UTF-8'), 'UTF-8');
+    return preg_match('/(?<![a-z])ai(?![a-z])|suno|udio|生成ai|人工知能/u', $text) === 1;
+}

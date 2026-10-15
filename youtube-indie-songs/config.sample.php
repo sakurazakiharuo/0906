@@ -40,6 +40,13 @@ return [
     'max_subscribers' => 300,
     'days' => 3,
 
+    // ピックアップ（量産型ではなく、作りこまれた、登録者の少ない動画）
+    'pickup_max_subscribers' => 10,     // 登録者数の上限
+    'pickup_min_score' => 3,            // 作りこみ点数の下限（クレジット・歌詞・フル尺・MV・説明文で加点）
+    'pickup_max_uploads_30d' => 12,     // 直近 30 日の投稿数がこれを超えるチャンネルは量産型とみなす
+    'pickup_max_uploads_per_week' => 3, // 開設以来の平均投稿ペース（本/週）がこれを超えるチャンネルも量産型
+    'pickup_limit' => 10,               // 表示する最大件数
+
     // 1キーワードあたりの検索ページ数（1ページ=50件、100ユニット消費）
     'pages_per_keyword' => 4,
 ];
