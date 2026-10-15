@@ -142,3 +142,60 @@ function mentions_ai(array $snippet): bool
     $text = mb_strtolower(mb_convert_kana($snippet['title'] . ' ' . ($snippet['description'] ?? ''), 'a', 'UTF-8'), 'UTF-8');
     return preg_match('/(?<![a-z])ai(?![a-z])|suno|udio|生成ai|人工知能/u', $text) === 1;
 }
+
+// 説明文から X（旧 Twitter）のアカウントを探す。見つからなければ null
+//   x.com/xxx・twitter.com/xxx の URL、または「X: @xxx」「Twitter：@xxx」「𝕏 @xxx」の書き方に対応
+function find_x_handle(string $text): ?string
+{
+    $reserved = ['intent', 'share', 'home', 'search', 'hashtag', 'i', 'explore', 'settings', 'login', 'signup', 'messages', 'notifications', 'compose', 'tos', 'privacy'];
+    preg_match_all('#(?:https?://)?(?:www\.|mobile\.)?(?:x|twitter)\.com/@?([A-Za-z0-9_]{1,15})(?![A-Za-z0-9_])#iu', $text, $m);
+    foreach ($m[1] as $h) {
+        if (!in_array(strtolower($h), $reserved, true)) {
+            return $h;
+        }
+    }
+    if (preg_match('/(?:(?<![a-z])x|𝕏|twitter|ツイッター|エックス)\s*[:：]?\s*[@＠]([A-Za-z0-9_]{1,15})(?![A-Za-z0-9_])/iu', $text, $m)) {
+        return $m[1];
+    }
+    return null;
+}
+
+// X の文字数（日本語などは 2、URL は一律 23 として数える。上限 280）
+function x_length(string $text): int
+{
+    $len = 0;
+    $text = preg_replace_callback('#https?://\S+#u', function () use (&$len) {
+        $len += 23;
+        return '';
+    }, $text);
+    foreach (preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY) as $ch) {
+        $cp = mb_ord($ch, 'UTF-8');
+        $narrow = $cp <= 0x10FF || ($cp >= 0x2000 && $cp <= 0x200D) || ($cp >= 0x2010 && $cp <= 0x201F) || ($cp >= 0x2032 && $cp <= 0x2037);
+        $len += $narrow ? 1 : 2;
+    }
+    return $len;
+}
+
+// ピックアップ 1 件分の投稿文（280 字に収まるようにタイトルを切り詰める）
+function build_post_text(array $p): string
+{
+    $artist = $p['artist'] . ($p['x_handle'] ? ' @' . $p['x_handle'] : '');
+    $highlights = implode('・', array_map(fn($r) => preg_replace('/（.*）$/u', '', $r), array_slice($p['reasons'], 0, 3)));
+    $make = fn($title) => "🎤 初期推しピックアップ\n"
+        . "「{$title}」\n"
+        . "{$artist}（登録者{$p['subscribers']}人）\n"
+        . ($highlights !== '' ? "{$highlights}\n" : '')
+        . "{$p['url']}\n"
+        . '#初期推し #オリジナル曲';
+    $title = $p['title'];
+    while (x_length($make($title)) > 280 && mb_strlen($title) > 1) {
+        $title = mb_substr($title, 0, mb_strlen($title) - 2) . '…';
+    }
+    return $make($title);
+}
+
+// X の投稿画面を、投稿文を入れた状態で開く URL
+function x_intent_url(string $text): string
+{
+    return 'https://x.com/intent/post?text=' . rawurlencode($text);
+}

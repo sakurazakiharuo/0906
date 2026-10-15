@@ -278,6 +278,8 @@ foreach ($videos as $v) {
                 'channel_created' => strtotime($ch['snippet']['publishedAt'] ?? 'now'),
                 'score' => $score,
                 'reasons' => $reasons,
+                // X のアカウント（動画説明欄 → チャンネル説明文の順に探す）
+                'x_handle' => find_x_handle($sn['description'] ?? '') ?? find_x_handle($ch['snippet']['description'] ?? ''),
             ];
         }
     }
@@ -325,6 +327,10 @@ foreach ($pickupCandidates as $c) {
 }
 usort($pickup, fn($a, $b) => $b['score'] <=> $a['score'] ?: $a['views'] <=> $b['views']);
 $pickup = array_slice($pickup, 0, $config['pickup_limit']);
+foreach ($pickup as &$p) {
+    $p['post_text'] = build_post_text($p);
+}
+unset($p);
 
 // 7. 再生数の昇順（少ない順）
 usort($rows, fn($a, $b) => $a['views'] <=> $b['views']);
