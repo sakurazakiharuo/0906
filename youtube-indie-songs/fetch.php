@@ -336,18 +336,27 @@ unset($p);
 usort($rows, fn($a, $b) => $a['views'] <=> $b['views']);
 
 // 8. HTML を書き出す（一時ファイル → rename で差し替え、閲覧中に壊れたページを出さない）
-$updatedAt = date('Y-m-d H:i');
-ob_start();
-require __DIR__ . '/template.php';
-$html = ob_get_clean();
-
-$out = $config['output_html'];
-if (!is_dir(dirname($out))) {
-    mkdir(dirname($out), 0755, true);
+function render_to(string $template, string $path, array $vars): void
+{
+    extract($vars);
+    ob_start();
+    require __DIR__ . '/' . $template;
+    $html = ob_get_clean();
+    if (!is_dir(dirname($path))) {
+        mkdir(dirname($path), 0755, true);
+    }
+    file_put_contents($path . '.tmp', $html);
+    rename($path . '.tmp', $path);
 }
-$tmp = $out . '.tmp';
-file_put_contents($tmp, $html);
-rename($tmp, $out);
+
+$updatedAt = date('Y-m-d H:i');
+$vars = compact('rows', 'pickup', 'config', 'updatedAt');
+render_to('template.php', $config['output_html'], $vars);
+
+// X 投稿用ページ（検索エンジンに載らないよう noindex。トップページからはリンクしない）
+if (!empty($config['output_post_html'])) {
+    render_to('template_post.php', $config['output_post_html'], $vars);
+}
 
 log_line(sprintf('OK search=%d tracked_channels=%d tracked_new_videos=%d listed=%d pickup=%d',
     $searchCount, count($tracked), $watchCount, count($rows), count($pickup)));

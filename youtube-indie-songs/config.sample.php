@@ -8,6 +8,10 @@ return [
     // ~/www/indie-songs/index.html に出力され、https://アカウント名.sakura.ne.jp/indie-songs/ で見られる
     'output_html' => dirname(__DIR__) . '/www/indie-songs/index.html',
 
+    // X 投稿用ページ（検索エンジンに載らない非公開ページ）。推測されにくい名前にする
+    // 不要なら null
+    'output_post_html' => dirname(__DIR__) . '/www/indie-songs/post-CHANGE-THIS-TO-RANDOM.html',
+
     // 検索キーワード
     'keywords' => ['オリジナル曲', 'オリジナルソング', 'オリジナル楽曲', 'MV', 'music video'],
 

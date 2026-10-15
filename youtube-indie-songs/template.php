@@ -1,7 +1,6 @@
 <?php
 /** @var array $rows */
 /** @var string $updatedAt */
-function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 ?>
 <!DOCTYPE html>
 <html lang="ja">
@@ -29,8 +28,6 @@ function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
   .pick .t { font-weight: bold; display: block; margin-bottom: 4px; }
   .pick .a { font-size: .85rem; color: #444; }
   .pick .s { font-size: .8rem; color: #666; margin: 4px 0 6px; }
-  .xbtn { display: inline-block; margin-top: 8px; font-size: .8rem; background: #000; color: #fff; border-radius: 999px; padding: 4px 12px; }
-  .xbtn:hover { text-decoration: none; opacity: .85; }
   .tag { display: inline-block; font-size: .72rem; background: #fdecec; color: #a00; border-radius: 4px; padding: 1px 6px; margin: 2px 4px 0 0; }
 </style>
 </head>
@@ -50,7 +47,6 @@ function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
     <?php if ($p['x_handle']): ?><a class="a" href="https://x.com/<?= h($p['x_handle']) ?>" target="_blank" rel="noopener">@<?= h($p['x_handle']) ?></a><?php endif; ?>
     <div class="s">登録者 <?= number_format($p['subscribers']) ?> 人 ・ 再生 <?= number_format($p['views']) ?> 回 ・ <?= h($p['published']) ?></div>
     <?php foreach ($p['reasons'] as $r): ?><span class="tag"><?= h($r) ?></span><?php endforeach; ?>
-    <div><a class="xbtn" href="<?= h(x_intent_url($p['post_text'])) ?>" target="_blank" rel="noopener">𝕏 でポスト</a></div>
   </div>
 <?php endforeach; ?>
 </div>

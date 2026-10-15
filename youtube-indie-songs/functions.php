@@ -1,5 +1,11 @@
 <?php
 
+// HTML エスケープ
+function h($s): string
+{
+    return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8');
+}
+
 // 日本語（ひらがな・カタカナ・漢字）が含まれるか
 function has_japanese(string $text): bool
 {
