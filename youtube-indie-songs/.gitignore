@@ -1,3 +1,5 @@
 config.php
 fetch.log
 channels.json
+excluded.json
+excluded.json.lock

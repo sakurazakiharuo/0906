@@ -16,6 +16,7 @@ date_default_timezone_set('Asia/Tokyo');
 $config = require __DIR__ . '/config.php';
 $apiKey = $config['api_key'];
 require __DIR__ . '/functions.php';
+require __DIR__ . '/exclusions.php';
 
 const CHANNELS_FILE = __DIR__ . '/channels.json';
 
@@ -150,6 +151,9 @@ foreach ($manual as $id) {
     $tracked[$id] = ($tracked[$id] ?? []) + ['title' => '', 'source' => 'manual', 'added' => date('Y-m-d')];
     $tracked[$id]['source'] = 'manual';
 }
+// 除外ボタンで外したチャンネルは記録からも消す（新着も見に行かない）
+$exclusions = load_exclusions();
+$tracked = array_diff_key($tracked, $exclusions['channels']);
 
 // 登録者数が上限を超えた・非公開になった・消えたチャンネルは記録から外す（手動登録は残す）
 $trackedInfo = $tracked ? fetch_channels(array_keys($tracked), $apiKey) : [];
@@ -216,6 +220,10 @@ $rows = [];
 $pickupCandidates = [];
 foreach ($videos as $v) {
     $sn = $v['snippet'];
+    // 除外ボタンで外した動画・チャンネルは二度と載せない
+    if (isset($exclusions['videos'][$v['id']]) || isset($exclusions['channels'][$sn['channelId']])) {
+        continue;
+    }
     $ch = $channels[$sn['channelId']] ?? null;
     if (!$ch || !empty($ch['statistics']['hiddenSubscriberCount'])) {
         continue;
@@ -368,6 +376,21 @@ function render_to(string $template, string $path, array $vars): void
     rename($path . '.tmp', $path);
 }
 
+// 除外ボタンの受け口（投稿用ページと同じフォルダに自動で置く。このアプリのフォルダの場所を書き込む）
+function write_exclude_endpoint(array $config): string
+{
+    $token = exclusion_token($config);
+    $path = dirname($config['output_post_html']) . '/exclude-' . substr(hash('sha256', $token), 0, 16) . '.php';
+    $code = "<?php\n// fetch.php が自動生成。編集しても次の実行で上書きされます\n"
+        . 'define(\'APP_DIR\', ' . var_export(__DIR__, true) . ");\n"
+        . 'define(\'EXCLUDE_TOKEN\', ' . var_export($token, true) . ");\n"
+        . "require APP_DIR . '/exclude_api.php';\n";
+    if (!is_file($path) || file_get_contents($path) !== $code) {
+        file_put_contents($path, $code);
+    }
+    return $path;
+}
+
 $updatedAt = date('Y-m-d H:i');
 $vars = compact('rows', 'pickup', 'config', 'updatedAt');
 render_to('template.php', $config['output_html'], $vars);
@@ -377,7 +400,8 @@ if (!empty($config['output_post_html'])) {
     // 投稿用ページでは短すぎる動画（既定 40 秒以下）を除く
     $minSec = $config['post_min_duration_sec'] ?? 40;
     $postVars = ['pickup' => array_values(array_filter($pickup, fn($p) => $p['duration_sec'] > $minSec))] + $vars;
-    render_to('template_post.php', $config['output_post_html'], $postVars);
+    render_to('template_post.php', $config['output_post_html'], $postVars + ['excludeToken' => exclusion_token($config),
+        'excludeEndpoint' => basename(write_exclude_endpoint($config))]);
 }
 
 log_line(sprintf('OK search=%d tracked_channels=%d tracked_new_videos=%d listed=%d pickup=%d',
