@@ -249,6 +249,10 @@ foreach ($videos as $v) {
     if (!array_diff($hits, $config['keywords_require_hiragana']) && !has_hiragana($sn['description'] ?? '')) {
         continue;
     }
+    // ランキング・まとめ・解説系の動画は除外（オリジナル曲ではないため）
+    if (is_compilation($sn)) {
+        continue;
+    }
     // 歌ってみた・カバー・BGM などを除外
     if (has_excluded_word($sn, $config['exclude_words'])) {
         continue;

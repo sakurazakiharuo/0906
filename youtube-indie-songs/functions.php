@@ -241,3 +241,11 @@ function mentions_ai(array $snippet): bool
 {
     return text_has_ai($snippet['title'] . ' ' . ($snippet['description'] ?? '') . ' ' . implode(' ', $snippet['tags'] ?? []));
 }
+
+// オリジナル曲ではない「ランキング・まとめ・解説」系の動画か（タイトルで判定。config に関係なく常に適用）
+// タグには「おすすめ曲」などを SEO 目的で付けるオリジナル曲も多いので、タグは見ない
+function is_compilation(array $snippet): bool
+{
+    $title = mb_strtolower(mb_convert_kana($snippet['title'], 'a', 'UTF-8'), 'UTF-8');
+    return preg_match('/ランキング|ranking|(?<![a-z])top\s*\d+|ベスト\s*\d+|まとめ|再生回数|リアクション|reaction|解説|歴代|人気曲|ヒット曲|名曲|聴き比べ|作業用/u', $title) === 1;
+}
