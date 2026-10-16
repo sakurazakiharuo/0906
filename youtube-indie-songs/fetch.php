@@ -100,56 +100,69 @@ function fetch_channels(array $ids, string $apiKey): array
     return $channels;
 }
 
-// 1 言語分の処理: 候補を集めて条件で絞り込み、新着リスト・ピックアップ・芽吹きを作る
-// 候補が 1 件もなければ null（その言語のページは更新しない）
-function process_language(array $P, array $config, string $apiKey, array $exclusions, bool &$searchBlocked): ?array
+// キーワード検索（search.list: 1 日 100 回まで。全言語の合計）
+// 回数の上限に達したときに特定の言語だけ 0 件にならないよう、言語を順番に回して検索する:
+//   1 ページ目: 日本語の 1 語目 → 中文の 1 語目 → 韓国語の 1 語目 → 日本語の 2 語目 → …、そのあと 2 ページ目 … の順
+// 戻り値: [言語コード => [videoId => ヒットしたキーワード一覧]]
+function search_all_languages(array $profiles, array $config, string $apiKey): array
 {
-    $code = $P['code'];
-    $publishedAfterTs = time() - $config['days'] * 86400;
-    $videoIds = []; // videoId => ヒットしたキーワード一覧（記録済みチャンネル経由は後で本文から判定）
-
-    // 1. キーワード検索で候補動画を集める（search.list: 1 日 100 回まで。全言語の合計）
-    foreach ($P['keywords'] as $keyword) {
-        if ($searchBlocked) {
-            break;
-        }
-        $pageToken = null;
-        for ($page = 0; $page < $P['pages_per_keyword']; $page++) {
-            $params = [
-                'key' => $apiKey,
-                'part' => 'snippet',
-                'q' => $keyword,
-                'type' => 'video',
-                'publishedAfter' => gmdate('Y-m-d\TH:i:s\Z', $publishedAfterTs),
-                'order' => 'date',
-                'regionCode' => $P['region'],
-                'relevanceLanguage' => $P['relevance_lang'],
-                'maxResults' => 50,
-            ];
-            // 「MV」など言語を問わない語は無関係な動画が多いので音楽カテゴリに限定する
-            if (in_array($keyword, $P['music_category_only_keywords'], true)) {
-                $params['videoCategoryId'] = '10';
-            }
-            if ($pageToken) {
-                $params['pageToken'] = $pageToken;
-            }
-            try {
-                $res = api_get('search', $params);
-            } catch (RuntimeException $e) {
-                // 割り当て超過などで検索が失敗したら、ほかの言語も含めて検索をやめ、集めた分と記録済みチャンネルで続行する
-                log_line("WARN [$code] search stopped ($keyword p" . ($page + 1) . '): ' . preg_replace('/\s+/', ' ', substr($e->getMessage(), 0, 300)));
-                $searchBlocked = true;
-                break 2;
-            }
-            foreach ($res['items'] ?? [] as $item) {
-                $videoIds[$item['id']['videoId']][] = $keyword;
-            }
-            $pageToken = $res['nextPageToken'] ?? null;
-            if (!$pageToken) {
-                break;
+    $publishedAfter = gmdate('Y-m-d\TH:i:s\Z', time() - $config['days'] * 86400);
+    $hits = array_fill_keys(array_keys($profiles), []);
+    $tokens = [];
+    $maxPages = max(array_column($profiles, 'pages_per_keyword'));
+    $maxKeywords = max(array_map(fn($P) => count($P['keywords']), $profiles));
+    for ($page = 0; $page < $maxPages; $page++) {
+        for ($k = 0; $k < $maxKeywords; $k++) {
+            foreach ($profiles as $code => $P) {
+                $keyword = $P['keywords'][$k] ?? null;
+                if ($keyword === null || $page >= $P['pages_per_keyword']) {
+                    continue;
+                }
+                if ($page > 0 && empty($tokens[$code][$keyword])) {
+                    continue; // 前のページで結果が終わったキーワード
+                }
+                $params = [
+                    'key' => $apiKey,
+                    'part' => 'snippet',
+                    'q' => $keyword,
+                    'type' => 'video',
+                    'publishedAfter' => $publishedAfter,
+                    'order' => 'date',
+                    'regionCode' => $P['region'],
+                    'relevanceLanguage' => $P['relevance_lang'],
+                    'maxResults' => 50,
+                ];
+                // 「MV」など言語を問わない語は無関係な動画が多いので音楽カテゴリに限定する
+                if (in_array($keyword, $P['music_category_only_keywords'], true)) {
+                    $params['videoCategoryId'] = '10';
+                }
+                if ($page > 0) {
+                    $params['pageToken'] = $tokens[$code][$keyword];
+                }
+                try {
+                    $res = api_get('search', $params);
+                } catch (RuntimeException $e) {
+                    // 割り当て超過などで検索が失敗したら検索をやめ、集めた分と記録済みチャンネルで続行する
+                    log_line("WARN [$code] search stopped ($keyword p" . ($page + 1) . '): ' . preg_replace('/\s+/', ' ', substr($e->getMessage(), 0, 300)));
+                    return $hits;
+                }
+                foreach ($res['items'] ?? [] as $item) {
+                    $hits[$code][$item['id']['videoId']][] = $keyword;
+                }
+                $tokens[$code][$keyword] = $res['nextPageToken'] ?? null;
             }
         }
     }
+    return $hits;
+}
+
+// 1 言語分の処理: 検索結果と記録済みチャンネルの新着を合わせて条件で絞り込み、新着リスト・ピックアップ・芽吹きを作る
+// 候補が 1 件もなければ null
+function process_language(array $P, array $config, string $apiKey, array $exclusions, array $searchHits): ?array
+{
+    $code = $P['code'];
+    $publishedAfterTs = time() - $config['days'] * 86400;
+    $videoIds = $searchHits; // videoId => ヒットしたキーワード一覧（記録済みチャンネル経由は後で本文から判定）
     $searchCount = count($videoIds);
 
     // 2. 記録済みチャンネル＋手動登録チャンネルの新着動画を集める
@@ -464,10 +477,10 @@ function write_exclude_endpoint(array $config): string
 // ---- 実行 ----
 $profiles = language_profiles($config);
 $exclusions = load_exclusions();
-$searchBlocked = false;
+$searchHits = search_all_languages($profiles, $config, $apiKey);
 $results = [];
 foreach ($profiles as $code => $P) {
-    $results[$code] = process_language($P, $config, $apiKey, $exclusions, $searchBlocked);
+    $results[$code] = process_language($P, $config, $apiKey, $exclusions, $searchHits[$code]);
 }
 
 // タブ（各言語のページへのリンク）
@@ -476,6 +489,10 @@ $updatedAt = date('Y-m-d H:i');
 foreach ($profiles as $code => $P) {
     if ($results[$code] !== null) {
         render_to('template.php', $P['output'], $results[$code] + compact('P', 'tabs', 'config', 'updatedAt'));
+    } elseif (!is_file($P['output'])) {
+        // 候補が 0 件で、まだページがない言語は空のページを作る（タブのリンク先がないと困るため）
+        // 前回のページがあればそのまま残す
+        render_to('template.php', $P['output'], ['rows' => [], 'pickup' => [], 'mebuki' => []] + compact('P', 'tabs', 'config', 'updatedAt'));
     }
 }
 
