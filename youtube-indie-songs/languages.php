@@ -24,7 +24,7 @@ function language_profiles(array $config): array
             'music_category_only_keywords' => $config['music_category_only_keywords'] ?? ['MV', 'music video'],
             'loose_keywords' => $config['keywords_require_hiragana'] ?? ['MV', 'music video'],
             'exclude_words' => $config['exclude_words'],
-            'compilation_regex' => 'ランキング|ranking|(?<![a-z])top\s*\d+|ベスト\s*\d+|まとめ|再生回数|リアクション|reaction|解説|歴代|人気曲|ヒット曲|名曲|聴き比べ|作業用',
+            'compilation_regex' => 'ランキング|ranking|(?<![a-z])top\s*\d+|ベスト\s*\d+|まとめ|再生回数|リアクション|reaction|解説|歴代|人気曲|ヒット曲|名曲|聴き比べ|作業用|(?<![a-z])vs\.?(?![a-z])',
             'song_words' => $config['song_words'] ?? ['オリジナル曲', 'オリジナルソング', 'オリジナル楽曲', '新曲', 'MV', 'music video', 'lyric video',
                 '作詞', '作曲', '編曲', '歌詞', 'lyrics', 'vocal', 'ボーカル', '弾き語り', 'song'],
             'pages_per_keyword' => $config['pages_per_keyword'],
@@ -73,7 +73,7 @@ function language_profiles(array $config): array
             // 翻唱＝カバー、動態歌詞・抖音・無損＝他人の曲の転載によくある語、伴奏・KTV＝カラオケ、歌單＝プレイリスト
             'exclude_words' => ['翻唱', 'cover', '翻自', 'Cover by', '動態歌詞', '动态歌词', '抖音', '無損', '无损', '高音質', 'KTV', '卡拉OK',
                 '伴奏', '歌單', '歌单', 'playlist', 'BGM', '純音樂', '一小時', '1小時', '循環播放', 'Pinyin'],
-            'compilation_regex' => '排行|排名|(?<![a-z])top\s*\d+|合集|串燒|串烧|盤點|反應|reaction|解說|歷代|熱門歌曲|經典歌曲|名曲',
+            'compilation_regex' => '排行|排名|(?<![a-z])top\s*\d+|合集|串燒|串烧|盤點|反應|reaction|解說|歷代|熱門歌曲|經典歌曲|名曲|(?<![a-z])vs\.?(?![a-z])',
             'song_words' => ['原創', '自創', '創作', '新歌', '新曲', '單曲', 'MV', 'music video', 'lyric video',
                 '作詞', '作曲', '編曲', '歌詞', '演唱', '主唱', '自彈自唱', 'song'],
             'pages_per_keyword' => 3,
@@ -123,7 +123,8 @@ function language_profiles(array $config): array
             // 커버＝カバー、불러보았다＝歌ってみた、노래방＝カラオケ、MR・반주＝伴奏、플리＝プレイリスト、가사/해석＝転載によくある語
             'exclude_words' => ['커버', 'cover', '불러보았다', '불러봤다', '불러봄', '노래방', 'MR', '반주', '플레이리스트', 'playlist', '플리',
                 'BGM', '1시간', '반복재생', '가사/해석', '가사 해석', '한글자막', '번역'],
-            'compilation_regex' => '랭킹|순위|(?<![a-z])top\s*\d+|모음|메들리|리액션|reaction|해설|역대|명곡|인기곡',
+            // 정규N집・타이틀곡＝プロのアルバム曲（ファンによる紹介動画に多い）
+            'compilation_regex' => '랭킹|순위|(?<![a-z])top\s*\d+|모음|메들리|리액션|reaction|해설|역대|명곡|인기곡|(?<![a-z])vs\.?(?![a-z])|정규\s*\d+\s*집|타이틀곡',
             'song_words' => ['자작곡', '창작곡', '오리지널', '신곡', '싱글', 'MV', '뮤직비디오', 'music video', 'lyric video',
                 '작사', '작곡', '편곡', '가사', '보컬', 'song'],
             'pages_per_keyword' => 3,

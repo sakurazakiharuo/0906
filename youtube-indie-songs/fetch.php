@@ -214,6 +214,30 @@ function process_language(array $P, array $config, string $apiKey, array $exclus
     $channelIds = array_map(fn($v) => $v['snippet']['channelId'], $videos);
     $channels = $trackedInfo + fetch_channels(array_diff($channelIds, array_keys($trackedInfo)), $apiKey);
 
+    // AI で作ったと書いた動画が 1 本でもあるチャンネルは、ほかの動画も含めてすべて除外する
+    // （一度見つかったチャンネルは ai_channels.json に記録し、次回以降も除外）
+    $aiFile = __DIR__ . '/ai_channels.json';
+    $aiChannels = is_file($aiFile) ? (json_decode(file_get_contents($aiFile), true) ?: []) : [];
+    if ($config['exclude_ai_tagged'] ?? true) {
+        // config の ai_allow_channels に書いたチャンネルは AI 扱いしない（自分のチャンネルなど）
+        $allow = array_flip($config['ai_allow_channels'] ?? []);
+        $aiChannels = array_diff_key($aiChannels, $allow);
+        foreach ($videos as $v) {
+            if (isset($allow[$v['snippet']['channelId']])) {
+                continue;
+            }
+            $sn = $v['snippet'];
+            if (!isset($aiChannels[$sn['channelId']]) && (mentions_ai($sn) || text_has_ai($sn['channelTitle']))) {
+                $aiChannels[$sn['channelId']] = ['title' => $sn['channelTitle'], 'video' => $v['id'], 'at' => date('Y-m-d')];
+            }
+        }
+        file_put_contents($aiFile . '.tmp', json_encode($aiChannels, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        rename($aiFile . '.tmp', $aiFile);
+        $tracked = array_filter($tracked, fn($t, $id) => !isset($aiChannels[$id]) || $t['source'] === 'manual', ARRAY_FILTER_USE_BOTH);
+    } else {
+        $aiChannels = [];
+    }
+
     // 5. 条件で絞り込み
     $rows = [];
     $pickupCandidates = [];
@@ -255,9 +279,13 @@ function process_language(array $P, array $config, string $apiKey, array $exclus
         if (has_excluded_word($sn, $P['exclude_words'])) {
             continue;
         }
-        // AI 生成のタグ・ハッシュタグ（#AI, #AI音楽, #suno など）が付いた動画、
-        // チャンネル名に AI が入っている動画は除外（config に項目がなくても既定で除外する）
-        if (($config['exclude_ai_tagged'] ?? true) && (has_ai_tag($sn) || text_has_ai($sn['channelTitle']))) {
+        // AI で作った動画は除外: タイトル・説明欄・タグ・ハッシュタグ・チャンネル名のどこかに
+        // AI / Suno / Udio / 人工知能 などがある動画のチャンネル（上で判定・記録済み）は除外（config に項目がなくても既定で除外する）
+        if (isset($aiChannels[$sn['channelId']])) {
+            continue;
+        }
+        // ファンが有名歌手の曲を載せているチャンネル（「〇〇ファン」「왕팬」「粉絲」など）は除外
+        if (is_fan_channel($sn['channelTitle'])) {
             continue;
         }
         // 8分以上の動画は除外
@@ -278,6 +306,8 @@ function process_language(array $P, array $config, string $apiKey, array $exclus
             'published' => date('Y-m-d H:i', strtotime($sn['publishedAt'])),
             // X のアカウント（動画説明欄 → チャンネル説明文の順に探す）
             'x_handle' => find_x_handle($sn['description'] ?? '') ?? find_x_handle($ch['snippet']['description'] ?? ''),
+            'channel_id' => $sn['channelId'],
+            'duration_sec' => duration_sec($v['contentDetails']['duration'] ?? ''),
         ];
         $row['post_text'] = build_list_post_text($P, $row);
         $rows[] = $row;
@@ -301,6 +331,27 @@ function process_language(array $P, array $config, string $apiKey, array $exclus
         $tracked[$id] = ($tracked[$id] ?? ['source' => 'search', 'added' => date('Y-m-d')]);
         $tracked[$id]['title'] = $sn['channelTitle'];
         $tracked[$id]['last_listed'] = date('Y-m-d');
+    }
+
+    // 量産型の除外: 3 日間にフル尺（90 秒以上）の曲を 5 本以上出しているチャンネルは、人の手では難しい量なので
+    // AI などで量産しているとみなし、そのチャンネルの動画をすべて外す（記録からも外す）。短いティーザーは数えない
+    $fullCount = [];
+    foreach ($rows as $r) {
+        if ($r['duration_sec'] >= 90) {
+            $fullCount[$r['channel_id']] = ($fullCount[$r['channel_id']] ?? 0) + 1;
+        }
+    }
+    $maxFull = $config['max_full_songs_per_window'] ?? 4;
+    $burst = array_keys(array_filter($fullCount, fn($n) => $n > $maxFull));
+    if ($burst) {
+        $rows = array_values(array_filter($rows, fn($r) => !in_array($r['channel_id'], $burst, true)));
+        $pickupCandidates = array_values(array_filter($pickupCandidates, fn($r) => !in_array($r['channel_id'], $burst, true)));
+        foreach ($burst as $id) {
+            if (($tracked[$id]['source'] ?? '') !== 'manual') {
+                unset($tracked[$id]);
+            }
+        }
+        log_line("INFO [$code] mass-production channels excluded: " . count($burst));
     }
 
     // 記録数の上限を超えたら、最後にリストに載った日が古いものから外す（手動登録は残す）

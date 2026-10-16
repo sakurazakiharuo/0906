@@ -333,3 +333,10 @@ function description_in_language(string $desc, string $script): bool
     }
     return false;
 }
+
+// ファンが有名歌手の曲を載せているチャンネルか（チャンネル名で判定）
+function is_fan_channel(string $channelTitle): bool
+{
+    $t = mb_strtolower($channelTitle, 'UTF-8');
+    return preg_match('/ファンチャンネル|ファンクラブ|ファン(?![ァ-ヶー])|粉絲|粉丝|後援會|应援|왕팬|찐팬|팬클럽|팬채널|팬영상|(?<![가-힣])팬(?![가-힣])|(?<![a-z])fans?\s*(club|channel|page|account|made)?(?![a-z])/u', $t) === 1;
+}

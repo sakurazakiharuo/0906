@@ -37,6 +37,9 @@ return [
     // タグ・ハッシュタグに AI 生成を示す語（AI, AI音楽, AIMusic, suno など）がある動画を除外
     'exclude_ai_tagged' => true,
 
+    // AI 扱いしないチャンネル（チャンネルID）。AI に触れた動画でもリストに載せたいチャンネルだけ書く
+    'ai_allow_channels' => [],
+
     // この秒数以上の動画は除外（8分 = 480秒）
     'max_duration_sec' => 480,
 
