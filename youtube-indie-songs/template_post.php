@@ -1,5 +1,5 @@
 <?php
-/** @var array $pickup */
+/** @var array $sections 言語ごとのピックアップ [['code', 'label', 'pickup'], ...] */
 /** @var string $updatedAt */
 ?>
 <!DOCTYPE html>
@@ -33,6 +33,10 @@
   .exbtn:hover { border-color: #c00; color: #c00; }
   .gone { background: #f3f3f3; color: #888; font-size: .85rem; }
   .gone .undo { margin-left: 8px; }
+  .tabs { display: flex; gap: 4px; border-bottom: 2px solid #000; margin: 12px 0; }
+  .tabs button { padding: 6px 14px; border: 0; border-radius: 6px 6px 0 0; background: #eee; color: #444; font: inherit; font-size: .9rem; cursor: pointer; }
+  .tabs button.active { background: #000; color: #fff; font-weight: bold; }
+  .panel[hidden] { display: none; }
   #excluded-list li { font-size: .8rem; color: #555; margin: 2px 0; }
 </style>
 </head>
@@ -40,30 +44,40 @@
 <h1>X 投稿用（非公開ページ）</h1>
 <p class="meta">最終更新: <?= h($updatedAt) ?>　｜　投稿文は編集できます。「𝕏 でポスト」で編集後の文章が入った投稿画面が開きます。</p>
 
-<?php if (!$pickup): ?>
-<p class="empty">今日のピックアップはありません。</p>
-<?php endif; ?>
+<nav class="tabs">
+<?php foreach ($sections as $k => $sec): ?>
+  <button type="button" data-tab="<?= h($sec['code']) ?>"<?= $k === 0 ? ' class="active"' : '' ?>><?= h($sec['label']) ?>（<?= count($sec['pickup']) ?>）</button>
+<?php endforeach; ?>
+</nav>
 
-<?php foreach ($pickup as $i => $p): ?>
-<div class="item" data-video="<?= h(substr($p['url'], -11)) ?>" data-channel="<?= h($p['channel_id']) ?>"
-     data-title="<?= h($p['title']) ?>" data-artist="<?= h($p['artist']) ?>">
-  <div class="t"><a href="<?= h($p['url']) ?>" target="_blank" rel="noopener noreferrer"><?= h($p['title']) ?></a></div>
-  <div class="s">
-    <?= h($p['artist']) ?> ・ 登録者 <?= number_format($p['subscribers']) ?> 人 ・ 再生 <?= number_format($p['views']) ?> 回
-    <?php if ($p['x_handle']): ?> ・ <a href="https://x.com/<?= h($p['x_handle']) ?>" target="_blank" rel="noopener noreferrer">@<?= h($p['x_handle']) ?></a>
-      <span class="warn">（説明欄から自動取得。本人か確認してください）</span>
-    <?php else: ?> ・ X アカウント見つからず<?php endif; ?>
+<?php foreach ($sections as $k => $sec): ?>
+<section class="panel" data-panel="<?= h($sec['code']) ?>"<?= $k === 0 ? '' : ' hidden' ?>>
+  <?php if (!$sec['pickup']): ?>
+  <p class="empty">今日のピックアップはありません。</p>
+  <?php endif; ?>
+
+  <?php foreach ($sec['pickup'] as $i => $p): ?>
+  <div class="item" data-video="<?= h(substr($p['url'], -11)) ?>" data-channel="<?= h($p['channel_id']) ?>"
+       data-title="<?= h($p['title']) ?>" data-artist="<?= h($p['artist']) ?>">
+    <div class="t"><a href="<?= h($p['url']) ?>" target="_blank" rel="noopener noreferrer"><?= h($p['title']) ?></a></div>
+    <div class="s">
+      <?= h($p['artist']) ?> ・ 登録者 <?= number_format($p['subscribers']) ?> 人 ・ 再生 <?= number_format($p['views']) ?> 回
+      <?php if ($p['x_handle']): ?> ・ <a href="https://x.com/<?= h($p['x_handle']) ?>" target="_blank" rel="noopener noreferrer">@<?= h($p['x_handle']) ?></a>
+        <span class="warn">（説明欄から自動取得。本人か確認してください）</span>
+      <?php else: ?> ・ X アカウント見つからず<?php endif; ?>
+    </div>
+    <textarea id="post-<?= h($sec['code']) ?>-<?= $i ?>"><?= h($p['post_text']) ?></textarea>
+    <div class="row">
+      <a class="xbtn" href="<?= h(x_intent_url($p['post_text'])) ?>" target="_blank" rel="noopener noreferrer" data-src="post-<?= h($sec['code']) ?>-<?= $i ?>">𝕏 でポスト</a>
+      <span class="count" data-count="post-<?= h($sec['code']) ?>-<?= $i ?>"></span>
+    </div>
+    <div class="row">
+      <button type="button" class="exbtn" data-type="videos">この動画を除外</button>
+      <button type="button" class="exbtn" data-type="channels">このチャンネルを除外</button>
+    </div>
   </div>
-  <textarea id="post<?= $i ?>"><?= h($p['post_text']) ?></textarea>
-  <div class="row">
-    <a class="xbtn" href="<?= h(x_intent_url($p['post_text'])) ?>" target="_blank" rel="noopener noreferrer" data-src="post<?= $i ?>">𝕏 でポスト</a>
-    <span class="count" data-count="post<?= $i ?>"></span>
-  </div>
-  <div class="row">
-    <button type="button" class="exbtn" data-type="videos">この動画を除外</button>
-    <button type="button" class="exbtn" data-type="channels">このチャンネルを除外</button>
-  </div>
-</div>
+  <?php endforeach; ?>
+</section>
 <?php endforeach; ?>
 
 <h2 style="font-size:1rem;margin-top:24px">除外リスト</h2>
@@ -71,6 +85,20 @@
 <ul id="excluded-list"><li>読み込み中…</li></ul>
 
 <script>
+// 言語タブの切り替え（選んだタブは次に開いたときも覚えておく）
+function showTab(code) {
+  document.querySelectorAll('.tabs button').forEach(function (b) { b.classList.toggle('active', b.dataset.tab === code); });
+  document.querySelectorAll('.panel').forEach(function (p) { p.hidden = p.dataset.panel !== code; });
+  try { localStorage.setItem('postTab', code); } catch (e) {}
+}
+document.querySelectorAll('.tabs button').forEach(function (b) {
+  b.addEventListener('click', function () { showTab(b.dataset.tab); });
+});
+try {
+  var saved = localStorage.getItem('postTab');
+  if (saved && document.querySelector('[data-panel="' + saved + '"]')) showTab(saved);
+} catch (e) {}
+
 // 除外ボタン: サーバの除外リストに保存する（次回の更新から二度と載らない）
 var EXCLUDE_URL = <?= json_encode($excludeEndpoint) ?>;
 var EXCLUDE_TOKEN = <?= json_encode($excludeToken) ?>;

@@ -1,9 +1,15 @@
 <?php
+/** @var array $P 言語の設定（languages.php） */
+/** @var array $tabs 言語タブ */
 /** @var array $rows */
+/** @var array $pickup */
+/** @var array $mebuki */
+/** @var array $config */
 /** @var string $updatedAt */
+$U = $P['ui'];
 ?>
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="<?= h($P['html_lang']) ?>">
 <head>
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-SPWQV0H3XJ"></script>
@@ -16,11 +22,15 @@
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>初期推し（YouTube歌動画低再生数リスト）</title>
+<title><?= h($U['title']) ?></title>
 <style>
-  body { font-family: system-ui, "Hiragino Sans", "Noto Sans JP", sans-serif; margin: 0; padding: 16px; background: #fafafa; color: #222; }
+  body { font-family: system-ui, "Hiragino Sans", "Noto Sans JP", "Noto Sans TC", "PingFang TC", "Noto Sans KR", "Apple SD Gothic Neo", sans-serif; margin: 0; padding: 16px; background: #fafafa; color: #222; }
   h1 { font-size: 1.4rem; margin: 0 0 4px; }
   h1 .sub { display: block; font-size: .85rem; font-weight: normal; color: #666; margin-top: 2px; }
+  .tabs { display: flex; gap: 4px; border-bottom: 2px solid #c00; margin: 12px 0 12px; }
+  .tabs a { padding: 6px 14px; border-radius: 6px 6px 0 0; background: #eee; color: #444; font-size: .9rem; }
+  .tabs a.active { background: #c00; color: #fff; font-weight: bold; }
+  .tabs a:hover { text-decoration: none; }
   .meta { color: #666; font-size: .85rem; margin-bottom: 16px; }
   .wrap { overflow-x: auto; }
   table { border-collapse: collapse; width: 100%; background: #fff; }
@@ -31,6 +41,7 @@
   a:hover { text-decoration: underline; }
   .empty { padding: 24px; text-align: center; color: #888; }
   h2 { font-size: 1.1rem; margin: 24px 0 4px; }
+  h2 small { font-size: .8rem; font-weight: normal; color: #666; }
   .note { color: #666; font-size: .8rem; margin: 0 0 10px; }
   .picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-bottom: 8px; }
   .pick { background: #fff; border: 1px solid #eee; border-radius: 8px; padding: 12px; }
@@ -45,34 +56,42 @@
 </style>
 </head>
 <body>
-<h1>初期推し<span class="sub">YouTube歌動画低再生数リスト</span></h1>
+<h1><?= h($U['h1']) ?><span class="sub"><?= h($U['sub']) ?></span></h1>
+
+<nav class="tabs">
+<?php foreach ($tabs as $t): ?>
+  <a href="<?= h($t['href']) ?>" hreflang="<?= h($t['code'] === 'zh' ? 'zh-Hant' : $t['code']) ?>"<?= $t['code'] === $P['code'] ? ' class="active"' : '' ?>><?= h($t['label']) ?></a>
+<?php endforeach; ?>
+</nav>
+
 <p class="meta">
-  登録者 0〜300 人 / 3 日以内の投稿 / 再生数の少ない順　｜　最終更新: <?= h($updatedAt) ?>（<?= count($rows) ?> 件）
+  <?= h(sprintf($U['meta'], $config['min_subscribers'], $config['max_subscribers'], $config['days'], $updatedAt, count($rows))) ?>
 </p>
+
 <?php if (!empty($pickup)): ?>
-<h2>ピックアップ</h2>
-<p class="note">登録者 <?= h($config['pickup_max_subscribers']) ?> 人以下・投稿ペースが量産型でないチャンネルから、クレジットや歌詞・MV など作りこみの手がかりが多い動画を自動で選んでいます。</p>
+<h2><?= h($U['pickup']) ?></h2>
+<p class="note"><?= h(sprintf($U['pickup_note'], $config['pickup_max_subscribers'])) ?></p>
 <div class="picks">
 <?php foreach ($pickup as $p): ?>
   <div class="pick">
     <a class="t" href="<?= h($p['url']) ?>" target="_blank" rel="noopener"><?= h($p['title']) ?></a>
     <a class="a" href="<?= h($p['channel_url']) ?>" target="_blank" rel="noopener"><?= h($p['artist']) ?></a>
     <?php if ($p['x_handle']): ?><a class="a" href="https://x.com/<?= h($p['x_handle']) ?>" target="_blank" rel="noopener">@<?= h($p['x_handle']) ?></a><?php endif; ?>
-    <div class="s">登録者 <?= number_format($p['subscribers']) ?> 人 ・ 再生 <?= number_format($p['views']) ?> 回 ・ <?= h($p['published']) ?></div>
-    <?php foreach ($p['reasons'] as $r): ?><span class="tag"><?= h($r) ?></span><?php endforeach; ?>
-    <div><a class="xbtn" href="https://x.com/intent/post" target="_blank" rel="noopener" data-text="<?= h($p['post_text']) ?>">𝕏 でポスト</a></div>
+    <div class="s"><?= h(sprintf($U['stats'], number_format($p['subscribers']), number_format($p['views']))) ?> ・ <?= h($p['published']) ?></div>
+    <?php foreach ($p['reason_labels'] as $r): ?><span class="tag"><?= h($r) ?></span><?php endforeach; ?>
+    <div><a class="xbtn" href="https://x.com/intent/post" target="_blank" rel="noopener" data-text="<?= h($p['post_text']) ?>"><?= h($U['xbtn']) ?></a></div>
   </div>
 <?php endforeach; ?>
 </div>
 <?php endif; ?>
 
 <?php if (!empty($mebuki)): ?>
-<h2>🌱 芽吹き<span style="font-size:.8rem;font-weight:normal;color:#666">（再生数ランキング トップ <?= count($mebuki) ?>）</span></h2>
-<p class="note">新着リストの中で、いま再生されはじめている動画です。</p>
+<h2><?= h($U['mebuki']) ?> <small><?= h(sprintf($U['mebuki_sub'], count($mebuki))) ?></small></h2>
+<p class="note"><?= h($U['mebuki_note']) ?></p>
 <div class="wrap">
 <table class="mebuki">
   <thead>
-    <tr><th>順位</th><th>アーティスト名</th><th>登録者数</th><th>動画タイトル</th><th>再生数</th><th>投稿日時</th><th></th></tr>
+    <tr><th><?= h($U['rank']) ?></th><?php foreach (array_slice($U['cols'], 1) as $c): ?><th><?= h($c) ?></th><?php endforeach; ?><th></th></tr>
   </thead>
   <tbody>
   <?php foreach ($mebuki as $m): ?>
@@ -83,7 +102,7 @@
       <td><a href="<?= h($m['url']) ?>" target="_blank" rel="noopener"><?= h($m['title']) ?></a></td>
       <td class="num"><?= number_format($m['views']) ?></td>
       <td class="num"><?= h($m['published']) ?></td>
-      <td><a class="xbtn" href="https://x.com/intent/post" target="_blank" rel="noopener" data-text="<?= h($m['post_text']) ?>">𝕏 でポスト</a></td>
+      <td><a class="xbtn" href="https://x.com/intent/post" target="_blank" rel="noopener" data-text="<?= h($m['post_text']) ?>"><?= h($U['xbtn']) ?></a></td>
     </tr>
   <?php endforeach; ?>
   </tbody>
@@ -91,15 +110,15 @@
 </div>
 <?php endif; ?>
 
-<h2>新着リスト</h2>
+<h2><?= h($U['list']) ?></h2>
 <div class="wrap">
 <table>
   <thead>
-    <tr><th>#</th><th>アーティスト名</th><th>登録者数</th><th>動画タイトル</th><th>再生数</th><th>投稿日時</th><th></th></tr>
+    <tr><?php foreach ($U['cols'] as $c): ?><th><?= h($c) ?></th><?php endforeach; ?><th></th></tr>
   </thead>
   <tbody>
   <?php if (!$rows): ?>
-    <tr><td colspan="7" class="empty">該当する動画がありません</td></tr>
+    <tr><td colspan="7" class="empty"><?= h($U['empty']) ?></td></tr>
   <?php endif; ?>
   <?php foreach ($rows as $i => $r): ?>
     <tr>
@@ -109,13 +128,13 @@
       <td><a href="<?= h($r['url']) ?>" target="_blank" rel="noopener"><?= h($r['title']) ?></a></td>
       <td class="num"><?= number_format($r['views']) ?></td>
       <td class="num"><?= h($r['published']) ?></td>
-      <td><a class="xbtn" href="https://x.com/intent/post" target="_blank" rel="noopener" data-text="<?= h($r['post_text']) ?>">𝕏 でポスト</a></td>
+      <td><a class="xbtn" href="https://x.com/intent/post" target="_blank" rel="noopener" data-text="<?= h($r['post_text']) ?>"><?= h($U['xbtn']) ?></a></td>
     </tr>
   <?php endforeach; ?>
   </tbody>
 </table>
 </div>
-<p class="meta">データ提供: YouTube Data API</p>
+<p class="meta"><?= h($U['credit']) ?></p>
 <script>
 // 「𝕏 でポスト」: 押したときに投稿文入りの X 投稿画面の URL を作る（ページを軽くするため）
 document.addEventListener('click', function (e) {
