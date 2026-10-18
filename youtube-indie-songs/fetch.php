@@ -184,7 +184,8 @@ function process_language(array $P, array $config, string $apiKey, array $exclus
         }
         $info = $trackedInfo[$id] ?? null;
         if (!$info || !empty($info['statistics']['hiddenSubscriberCount'])
-            || (int)($info['statistics']['subscriberCount'] ?? 0) > $config['max_subscribers']) {
+            || (int)($info['statistics']['subscriberCount'] ?? 0) > $config['max_subscribers']
+            || subscriber_count_unreliable($info, $config)) {
             unset($tracked[$id]);
         }
     }
@@ -266,6 +267,14 @@ function process_language(array $P, array $config, string $apiKey, array $exclus
         }
         $subs = (int)($ch['statistics']['subscriberCount'] ?? 0);
         if ($subs < $config['min_subscribers'] || $subs > $config['max_subscribers']) {
+            continue;
+        }
+        // API の登録者数が実際より少なく出ているチャンネル（総再生数が多すぎる）は除外
+        if (subscriber_count_unreliable($ch, $config)) {
+            continue;
+        }
+        // 「〇〇 - Topic」は YouTube が自動で作るチャンネル（本人のチャンネルではない）なので除外
+        if (preg_match('/ - Topic$/u', $sn['channelTitle'])) {
             continue;
         }
         // 言語の判定（日本語: かな必須 / 繁體中文: 繁体字が簡体字より多い / 한국어: ハングル）

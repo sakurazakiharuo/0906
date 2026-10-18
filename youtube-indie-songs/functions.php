@@ -340,3 +340,14 @@ function is_fan_channel(string $channelTitle): bool
     $t = mb_strtolower($channelTitle, 'UTF-8');
     return preg_match('/ファンチャンネル|ファンクラブ|ファン(?![ァ-ヶー])|粉絲|粉丝|後援會|应援|왕팬|찐팬|팬클럽|팬채널|팬영상|(?<![가-힣])팬(?![가-힣])|(?<![a-z])fans?\s*(club|channel|page|account|made)?(?![a-z])/u', $t) === 1;
 }
+
+// API の登録者数が実際より極端に少なく出ているチャンネルか（総再生数・1 本あたりの再生数で確かめる）
+// 公式アーティストチャンネルなどで、登録者数が数十人と返ってくるのに再生数が数百万のことがある
+function subscriber_count_unreliable(array $channel, array $config): bool
+{
+    $s = $channel['statistics'] ?? [];
+    $views = (int)($s['viewCount'] ?? 0);
+    $videos = max(1, (int)($s['videoCount'] ?? 0));
+    return $views >= ($config['max_channel_views'] ?? 1000000)
+        || $views / $videos >= ($config['max_views_per_video'] ?? 30000);
+}
