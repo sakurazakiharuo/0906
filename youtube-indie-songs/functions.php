@@ -191,7 +191,8 @@ function compose_post(array $P, ?string $header, array $p, string $note = ''): s
         . "{$artist}{$subs}\n"
         . ($note !== '' ? "{$note}\n" : '')
         . "{$p['url']}\n"
-        . $P['post']['tags'];
+        . $P['post']['tags']
+        . (($P['post']['footer'] ?? '') !== '' ? "\n" . $P['post']['footer'] : '');
     $title = $p['title'];
     while (x_length($make($title)) > 280 && mb_strlen($title) > 1) {
         $title = mb_substr($title, 0, mb_strlen($title) - 2) . '…';

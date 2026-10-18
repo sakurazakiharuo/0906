@@ -159,6 +159,13 @@ function language_profiles(array $config): array
         ],
     ];
 
+    // すべての X 投稿文の最後に入れる行（config.php の 'post_footer' で変更可。'' なら入れない）
+    $footer = $config['post_footer'] ?? '初期推しサイト:https://song.nakamurakozo.tv/';
+    foreach ($profiles as &$profile) {
+        $profile['post']['footer'] = $footer;
+    }
+    unset($profile);
+
     // config.php の 'languages' で上書き（例: 'languages' => ['zh' => ['watch_channels' => ['UC...']]]）
     foreach ($config['languages'] ?? [] as $code => $override) {
         if (isset($profiles[$code])) {

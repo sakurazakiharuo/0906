@@ -10,6 +10,8 @@ return [
 
     // X 投稿用ページ（検索エンジンに載らない非公開ページ）。推測されにくい名前にする
     // 不要なら null
+    // すべての X 投稿文の最後に入れる行（'' にすると入れない）
+    'post_footer' => '初期推しサイト:https://song.nakamurakozo.tv/',
     'post_min_duration_sec' => 40, // 投稿用ページでは、この秒数以下の動画を除外する
     'output_post_html' => dirname(__DIR__) . '/www/indie-songs/post-CHANGE-THIS-TO-RANDOM.html',
 
