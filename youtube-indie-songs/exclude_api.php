@@ -1,7 +1,7 @@
 <?php
 // 除外ボタンの受け口の本体（公開フォルダの exclude-xxxx.php から読み込まれる）
 //   GET  ?token=… → 除外リストを返す
-//   POST {"token", "type": "videos"|"channels", "id", "title", "add": true|false} → 追加・取り消し
+//   POST {"token", "type": "videos"|"channels"|"posted", "id", "title", "add": true|false} → 追加・取り消し
 
 require APP_DIR . '/exclusions.php';
 date_default_timezone_set('Asia/Tokyo');
@@ -29,7 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 $type = $input['type'] ?? '';
 $id = (string)($input['id'] ?? '');
-$valid = ($type === 'videos' && preg_match('/^[A-Za-z0-9_-]{11}$/', $id))
+$valid = (($type === 'videos' || $type === 'posted') && preg_match('/^[A-Za-z0-9_-]{11}$/', $id))
     || ($type === 'channels' && preg_match('/^UC[A-Za-z0-9_-]{22}$/', $id));
 if (!$valid) {
     reply(400, ['error' => 'invalid id']);

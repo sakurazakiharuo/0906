@@ -42,7 +42,7 @@
 </head>
 <body>
 <h1>X 投稿用（非公開ページ）</h1>
-<p class="meta">最終更新: <?= h($updatedAt) ?>　｜　投稿文は編集できます。「𝕏 でポスト」で編集後の文章が入った投稿画面が開きます。</p>
+<p class="meta">最終更新: <?= h($updatedAt) ?>　｜　投稿文は編集できます。「𝕏 でポスト」で編集後の文章が入った投稿画面が開き、その動画はポスト済みになります。</p>
 
 <nav class="tabs">
 <?php foreach ($sections as $k => $sec): ?>
@@ -81,7 +81,7 @@
 <?php endforeach; ?>
 
 <h2 style="font-size:1rem;margin-top:24px">除外リスト</h2>
-<p class="meta">ここにある動画・チャンネルは、次回の更新からどのリストにも載りません。</p>
+<p class="meta">除外した動画・チャンネルは、次回の更新からどのリストにも載りません。ポスト済みの動画は、このページにだけ出なくなります（公開ページには出続けます）。</p>
 <ul id="excluded-list"><li>読み込み中…</li></ul>
 
 <script>
@@ -117,12 +117,16 @@ function sendExclusion(type, id, title, add) {
 // 除外済みのカードを畳み、除外リストを表示する
 function render(ex) {
   document.querySelectorAll('.item').forEach(function (item) {
-    var gone = ex.videos[item.dataset.video] ? 'videos' : (ex.channels[item.dataset.channel] ? 'channels' : null);
+    var gone = ex.videos[item.dataset.video] ? 'videos' : (ex.channels[item.dataset.channel] ? 'channels'
+      : ((ex.posted || {})[item.dataset.video] ? 'posted' : null));
     if (gone && !item.classList.contains('gone')) {
       item.dataset.html = item.innerHTML;
       item.classList.add('gone');
       item.innerHTML = '';
-      item.appendChild(document.createTextNode((gone === 'videos' ? '動画「' + item.dataset.title : 'チャンネル「' + item.dataset.artist) + '」を除外しました'));
+      var msg = gone === 'videos' ? '動画「' + item.dataset.title + '」を除外しました'
+        : gone === 'channels' ? 'チャンネル「' + item.dataset.artist + '」を除外しました'
+        : '「' + item.dataset.title + '」はポスト済みです（次回の更新からこのページに出ません）';
+      item.appendChild(document.createTextNode(msg));
     } else if (!gone && item.classList.contains('gone')) {
       item.innerHTML = item.dataset.html;
       item.classList.remove('gone');
@@ -131,10 +135,14 @@ function render(ex) {
   });
   var list = document.getElementById('excluded-list');
   list.innerHTML = '';
-  ['channels', 'videos'].forEach(function (type) {
-    Object.keys(ex[type]).forEach(function (id) {
+  var labels = { channels: 'チャンネル: ', videos: '動画: ', posted: 'ポスト済み: ' };
+  ['channels', 'videos', 'posted'].forEach(function (type) {
+    // ポスト済みは増え続けるので新しい 20 件だけ表示する
+    var ids = Object.keys(ex[type] || {});
+    if (type === 'posted') ids = ids.slice(-20).reverse();
+    ids.forEach(function (id) {
       var li = document.createElement('li');
-      li.appendChild(document.createTextNode((type === 'videos' ? '動画: ' : 'チャンネル: ') + (ex[type][id].title || id) + '（' + ex[type][id].at + '）'));
+      li.appendChild(document.createTextNode(labels[type] + (ex[type][id].title || id) + '（' + ex[type][id].at + '）'));
       var undo = document.createElement('a');
       undo.href = '#';
       undo.className = 'undo';
@@ -153,6 +161,13 @@ function render(ex) {
 function showError(e) { alert('除外リストを保存できませんでした: ' + e.message); }
 
 function bindItem(item) {
+  // 「𝕏 でポスト」を押したらポスト済みとして記録する（次回の更新からこのページに出さない。公開ページには出続ける）
+  var xbtn = item.querySelector('.xbtn');
+  if (xbtn) {
+    xbtn.addEventListener('click', function () {
+      sendExclusion('posted', item.dataset.video, item.dataset.title, true).then(render).catch(showError);
+    });
+  }
   item.querySelectorAll('.exbtn').forEach(function (btn) {
     btn.addEventListener('click', function () {
       var isVideo = btn.dataset.type === 'videos';

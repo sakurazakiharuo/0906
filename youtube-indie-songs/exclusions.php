@@ -10,10 +10,11 @@ function load_exclusions(): array
     return [
         'videos' => $data['videos'] ?? [],
         'channels' => $data['channels'] ?? [],
+        'posted' => $data['posted'] ?? [], // X 投稿用ページで「ポスト」を押した動画（投稿用ページにだけ出さない）
     ];
 }
 
-// $type: 'videos' | 'channels'、$add: true で追加・false で取り消し
+// $type: 'videos' | 'channels' | 'posted'、$add: true で追加・false で取り消し
 function update_exclusion(string $type, string $id, bool $add, string $title = ''): array
 {
     $fp = fopen(EXCLUSIONS_FILE . '.lock', 'c');

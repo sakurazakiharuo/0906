@@ -429,12 +429,14 @@ function process_language(array $P, array $config, string $apiKey, array $exclus
         $pickup[$c['channel_id']] = $c;
     }
     usort($pickup, fn($a, $b) => $b['score'] <=> $a['score'] ?: $a['views'] <=> $b['views']);
-    $pickup = array_slice($pickup, 0, $config['pickup_limit']);
+    // 投稿用ページは「ポスト済み」を除いた残りから選ぶので、上限で切る前の全候補も持っておく
     foreach ($pickup as &$p) {
         $p['post_text'] = build_post_text($P, $p);
         $p['reason_labels'] = array_map(fn($r) => reason_label($r, $P['reasons']), $p['reasons']);
     }
     unset($p);
+    $pickupPool = $pickup;
+    $pickup = array_slice($pickup, 0, $config['pickup_limit']);
 
     // 7. 芽吹き: 再生数の多い順トップ 10
     $mebuki = $rows;
@@ -451,7 +453,7 @@ function process_language(array $P, array $config, string $apiKey, array $exclus
 
     log_line(sprintf('OK [%s] search=%d tracked_channels=%d tracked_new_videos=%d listed=%d pickup=%d',
         $code, $searchCount, count($tracked), $watchCount, count($rows), count($pickup)));
-    return compact('rows', 'pickup', 'mebuki');
+    return compact('rows', 'pickup', 'mebuki', 'pickupPool');
 }
 
 // HTML を書き出す（一時ファイル → rename で差し替え、閲覧中に壊れたページを出さない）
@@ -514,7 +516,9 @@ if (!empty($config['output_post_html'])) {
         $sections[] = [
             'code' => $code,
             'label' => $P['tab'],
-            'pickup' => array_values(array_filter($results[$code]['pickup'] ?? [], fn($p) => $p['duration_sec'] > $minSec)),
+            // 「ポスト」を押した動画と短すぎる動画を除き、残りの候補から上限まで（公開ページのピックアップには影響しない）
+            'pickup' => array_slice(array_values(array_filter($results[$code]['pickupPool'] ?? [],
+                fn($p) => $p['duration_sec'] > $minSec && !isset($exclusions['posted'][substr($p['url'], -11)]))), 0, $config['pickup_limit']),
         ];
     }
     render_to('template_post.php', $config['output_post_html'], compact('sections', 'updatedAt') + [
