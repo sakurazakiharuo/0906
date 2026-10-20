@@ -269,8 +269,12 @@ function process_language(array $P, array $config, string $apiKey, array $exclus
         if ($subs < $config['min_subscribers'] || $subs > $config['max_subscribers']) {
             continue;
         }
-        // API の登録者数が実際より少なく出ているチャンネル（総再生数が多すぎる）は除外
+        // API の登録者数が実際より少なく出ているチャンネル（総再生数・1 本あたりの再生数が多すぎる）は除外
         if (subscriber_count_unreliable($ch, $config)) {
+            continue;
+        }
+        // 投稿から数日でこの再生数に届く動画は、登録者 300 人以下のチャンネルではまずない（API の登録者数が誤っている）
+        if ((int)($v['statistics']['viewCount'] ?? 0) >= ($config['max_new_video_views'] ?? 10000)) {
             continue;
         }
         // 「〇〇 - Topic」は YouTube が自動で作るチャンネル（本人のチャンネルではない）なので除外

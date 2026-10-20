@@ -350,5 +350,5 @@ function subscriber_count_unreliable(array $channel, array $config): bool
     $views = (int)($s['viewCount'] ?? 0);
     $videos = max(1, (int)($s['videoCount'] ?? 0));
     return $views >= ($config['max_channel_views'] ?? 1000000)
-        || $views / $videos >= ($config['max_views_per_video'] ?? 30000);
+        || $views / $videos >= ($config['max_views_per_video'] ?? 10000);
 }
