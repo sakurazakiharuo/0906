@@ -41,6 +41,7 @@ cron（毎朝7時）→ fetch.php（PHP CLI）→ YouTube Data API v3 → 静的
 
 - 公開ページ上部の「Google でログイン」で Google アカウントでログイン（OAuth 2.0 / OpenID Connect + PKCE。スコープは openid profile で、受け取るのはアカウント番号と表示名だけ。メールアドレスは受け取らない）
 - 各動画の「＋初期推し」でそのチャンネルを登録。押した瞬間の登録者数・チャンネル開設日・チャンネル名を YouTube に確認して保存（channels.list 1 ユニット）。もう一度押すと取り消し
+- `oshi.php` の入力欄にチャンネルの URL（youtube.com/@ハンドル・youtube.com/channel/UC…・youtube.com/user/…）、@ハンドル、または動画の URL（watch?v= / youtu.be / shorts）を入れて「初期推しに登録」でも登録できる（チャンネルを探すのに 1 ユニット。youtube.com/c/… の古い形式は API で探せないため非対応）
 - `oshi.php` で自分の初期推し一覧（チャンネル名・チャンネル開始日・現在の登録者数・初期推し登録日・登録時の登録者数・増えた人数）。現在の登録者数は表示のたびに YouTube に確認（50 件ごとに 1 ユニット）
 - 公開フォルダの `oshi.php`・`oshi-callback.php` は fetch.php が自動で作る。本体は `oshi_lib.php`・`oshi_web.php`
 - 保存先は `~/youtube-indie-songs/data/`（SQLite の oshi.sqlite と、Cookie 署名用の secret.key。どちらも自動で作る）

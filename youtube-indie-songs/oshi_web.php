@@ -87,6 +87,7 @@ switch ($action) {
         oshi_json(200, ['logged_in' => true, 'name' => $user['name'], 'oshi' => $st->fetchAll(PDO::FETCH_COLUMN)]);
 
     case 'add':
+    case 'add_url':
     case 'remove':
         // 他のサイトから勝手に登録させられないよう、JSON・専用ヘッダー・同じサイトからの送信だけ受け付ける
         $host = $_SERVER['HTTP_HOST'] ?? '';
@@ -102,7 +103,17 @@ switch ($action) {
             oshi_json(401, ['error' => 'login required']);
         }
         $in = json_decode((string)file_get_contents('php://input', false, null, 0, 1025), true, 3);
-        $channelId = is_array($in) ? ($in['channel_id'] ?? '') : '';
+        if ($action === 'add_url') {
+            // 一覧ページの入力欄から: チャンネルの URL・@ハンドル・動画の URL からチャンネルを探す
+            $url = is_array($in) ? ($in['url'] ?? '') : '';
+            $channelId = is_string($url) ? oshi_resolve_channel($config, $url) : null;
+            if ($channelId === null) {
+                oshi_json(400, ['error' => 'チャンネルが見つかりませんでした。チャンネルのページの URL（youtube.com/@… や youtube.com/channel/UC…）か、動画の URL を入れてください。']);
+            }
+            $action = 'add';
+        } else {
+            $channelId = is_array($in) ? ($in['channel_id'] ?? '') : '';
+        }
         if (!is_string($channelId) || !preg_match('/^UC[A-Za-z0-9_-]{22}$/', $channelId)) {
             oshi_json(400, ['error' => 'invalid channel']);
         }
@@ -110,6 +121,11 @@ switch ($action) {
         if ($action === 'remove') {
             $db->prepare('DELETE FROM oshi WHERE user_id = ? AND channel_id = ?')->execute([$user['id'], $channelId]);
             oshi_json(200, ['ok' => true]);
+        }
+        $exists = $db->prepare('SELECT 1 FROM oshi WHERE user_id = ? AND channel_id = ?');
+        $exists->execute([$user['id'], $channelId]);
+        if ($exists->fetchColumn()) {
+            oshi_json(409, ['error' => 'このチャンネルはすでに初期推しに登録されています。']);
         }
         $count = $db->prepare('SELECT COUNT(*) FROM oshi WHERE user_id = ?');
         $count->execute([$user['id']]);
@@ -124,7 +140,7 @@ switch ($action) {
         $db->prepare('INSERT OR IGNORE INTO oshi (user_id, channel_id, channel_title, channel_published, subs_at_registration, hidden_at_registration, registered_at)
             VALUES (?, ?, ?, ?, ?, ?, ?)')
             ->execute([$user['id'], $channelId, $info['title'], $info['published'], $info['subs'], $info['subs'] === null ? 1 : 0, date('Y-m-d H:i:s')]);
-        oshi_json(200, ['ok' => true, 'subs' => $info['subs']]);
+        oshi_json(200, ['ok' => true, 'subs' => $info['subs'], 'title' => $info['title']]);
 
     case '':
         break; // 一覧ページ
@@ -165,6 +181,11 @@ header('Content-Type: text/html; charset=utf-8');
   .up { color: #2a7a2a; font-weight: bold; }
   a { color: #c00; text-decoration: none; }
   .btn { display: inline-block; background: #000; color: #fff; border-radius: 999px; padding: 8px 18px; }
+  .addf { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 16px; }
+  .addf input { flex: 1 1 320px; max-width: 520px; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; font: inherit; }
+  .addf button { background: #c00; color: #fff; border: 0; border-radius: 999px; padding: 8px 16px; font: inherit; cursor: pointer; }
+  .addf button:disabled { opacity: .5; }
+  .msg { font-size: .85rem; color: #c00; }
   .rm { font-size: .75rem; color: #888; background: none; border: 1px solid #ccc; border-radius: 999px; padding: 2px 8px; cursor: pointer; }
 </style>
 </head>
@@ -176,8 +197,13 @@ header('Content-Type: text/html; charset=utf-8');
   <p><a href="<?= h($base) ?>">← トップへ戻る</a></p>
 <?php else: ?>
   <p class="meta"><?= h($user['name']) ?> さんの初期推し（<?= count($rows) ?> チャンネル）　｜　<a href="<?= h($base) ?>">トップへ戻る</a>　｜　<a href="<?= h($self) ?>?action=logout">ログアウト</a></p>
+  <form id="add-form" class="addf">
+    <input type="text" id="add-url" placeholder="チャンネルの URL（例: https://www.youtube.com/@xxxx）や動画の URL" maxlength="300" required>
+    <button type="submit">初期推しに登録</button>
+    <span id="add-msg" class="msg"></span>
+  </form>
   <?php if (!$rows): ?>
-    <p>まだ初期推しがありません。リストの「＋初期推し」ボタンで登録できます。</p>
+    <p>まだ初期推しがありません。上の入力欄か、リストの「＋初期推し」ボタンで登録できます。</p>
   <?php else: ?>
   <div class="wrap">
   <table>
@@ -205,6 +231,19 @@ header('Content-Type: text/html; charset=utf-8');
   <?php endif; ?>
 <?php endif; ?>
 <script>
+var form = document.getElementById('add-form');
+if (form) {
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var btn = form.querySelector('button'), msg = document.getElementById('add-msg');
+    btn.disabled = true; msg.textContent = '確認中…';
+    fetch(<?= json_encode($self) ?> + '?action=add_url', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Oshi': '1' },
+      body: JSON.stringify({ url: document.getElementById('add-url').value }) })
+      .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status)); return j; }); })
+      .then(function () { location.reload(); })
+      .catch(function (err) { msg.textContent = err.message; btn.disabled = false; });
+  });
+}
 document.querySelectorAll('.rm').forEach(function (b) {
   b.addEventListener('click', function () {
     if (!confirm('このチャンネルを初期推しから外しますか？')) return;

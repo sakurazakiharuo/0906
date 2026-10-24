@@ -211,3 +211,63 @@ function oshi_youtube_channels(array $config, array $ids): array
     }
     return $out;
 }
+
+// 入力されたチャンネルの URL などからチャンネル ID（UC...）を求める。分からなければ null
+//   対応: /channel/UC… ・ /@ハンドル ・ 動画の URL（watch?v= / youtu.be / shorts / live）・ /user/名前 ・ UC… や @ハンドルだけの入力
+//   YouTube に問い合わせる場合は 1 ユニット（検索の 1 日 100 回とは別枠）
+function oshi_resolve_channel(array $config, string $input): ?string
+{
+    $input = trim($input);
+    if ($input === '' || strlen($input) > 300) {
+        return null;
+    }
+    if (preg_match('/^(UC[A-Za-z0-9_-]{22})$/', $input, $m)) {
+        return $m[1];
+    }
+    if (preg_match('~^@([^\s/?#]{3,100})$~u', $input, $m)) {
+        return oshi_lookup_channel($config, ['forHandle' => '@' . $m[1]]);
+    }
+    if (!preg_match('#^https?://#i', $input)) {
+        $input = 'https://' . $input;
+    }
+    $u = parse_url($input);
+    $host = strtolower(preg_replace('/^(www\.|m\.|music\.)/', '', $u['host'] ?? ''));
+    $path = rawurldecode($u['path'] ?? '');
+    parse_str($u['query'] ?? '', $q);
+    if ($host === 'youtu.be' && preg_match('#^/([A-Za-z0-9_-]{11})#', $path, $m)) {
+        return oshi_video_channel($config, $m[1]);
+    }
+    if ($host !== 'youtube.com') {
+        return null;
+    }
+    if (preg_match('#^/channel/(UC[A-Za-z0-9_-]{22})#', $path, $m)) {
+        return $m[1];
+    }
+    if (preg_match('#^/@([^/?\#]{3,100})#u', $path, $m)) {
+        return oshi_lookup_channel($config, ['forHandle' => '@' . $m[1]]);
+    }
+    if (preg_match('#^/user/([A-Za-z0-9._-]{1,100})#', $path, $m)) {
+        return oshi_lookup_channel($config, ['forUsername' => $m[1]]);
+    }
+    if (preg_match('#^/(?:shorts|live|embed)/([A-Za-z0-9_-]{11})#', $path, $m)) {
+        return oshi_video_channel($config, $m[1]);
+    }
+    if ($path === '/watch' && is_string($q['v'] ?? null) && preg_match('/^[A-Za-z0-9_-]{11}$/', $q['v'])) {
+        return oshi_video_channel($config, $q['v']);
+    }
+    return null;
+}
+
+function oshi_lookup_channel(array $config, array $params): ?string
+{
+    [$status, $res] = oshi_http('GET', 'https://www.googleapis.com/youtube/v3/channels?' . http_build_query($params + ['key' => $config['api_key'], 'part' => 'id']));
+    $id = $status === 200 ? ($res['items'][0]['id'] ?? null) : null;
+    return is_string($id) && preg_match('/^UC[A-Za-z0-9_-]{22}$/', $id) ? $id : null;
+}
+
+function oshi_video_channel(array $config, string $videoId): ?string
+{
+    [$status, $res] = oshi_http('GET', 'https://www.googleapis.com/youtube/v3/videos?' . http_build_query(['key' => $config['api_key'], 'part' => 'snippet', 'id' => $videoId]));
+    $id = $status === 200 ? ($res['items'][0]['snippet']['channelId'] ?? null) : null;
+    return is_string($id) && preg_match('/^UC[A-Za-z0-9_-]{22}$/', $id) ? $id : null;
+}
