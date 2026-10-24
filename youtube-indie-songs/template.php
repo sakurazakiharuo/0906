@@ -153,7 +153,7 @@ document.addEventListener('click', function (e) {
 
 // 初期推し: ログイン状態を確かめ、ボタンを表示する（oshi.php がない・動かないときは何も出さない）
 (function () {
-  var T = <?= json_encode(['login' => $U['login'], 'logout' => $U['logout'], 'mylist' => $U['mylist'], 'add' => $U['oshi_add'], 'added' => $U['oshi_added'], 'note' => $U['login_note']], JSON_UNESCAPED_UNICODE) ?>;
+  var T = <?= json_encode(['login' => $U['login'], 'logout' => $U['logout'], 'mylist' => $U['mylist'], 'ranking' => $U['ranking'], 'add' => $U['oshi_add'], 'added' => $U['oshi_added'], 'note' => $U['login_note']], JSON_UNESCAPED_UNICODE) ?>;
   var here = location.pathname;
   var state = { logged_in: false, oshi: {} };
   function el(tag, attrs, text) { var e = document.createElement(tag); for (var k in attrs) e.setAttribute(k, attrs[k]); if (text) e.textContent = text; return e; }
@@ -180,9 +180,13 @@ document.addEventListener('click', function (e) {
         bar.appendChild(el('a', { href: 'oshi.php' }, T.mylist));
         bar.appendChild(document.createTextNode('　｜　'));
         bar.appendChild(el('a', { href: 'oshi.php?action=logout&return=' + encodeURIComponent(here) }, T.logout));
+        bar.appendChild(document.createTextNode('　｜　'));
+        bar.appendChild(el('a', { href: 'ranking.php' }, T.ranking));
       } else {
         bar.appendChild(el('a', { class: 'login', href: 'oshi.php?action=login&return=' + encodeURIComponent(here) }, T.login));
         bar.appendChild(el('span', { class: 'note' }, T.note));
+        bar.appendChild(document.createTextNode('　'));
+        bar.appendChild(el('a', { href: 'ranking.php' }, T.ranking));
       }
       paint();
       document.body.classList.add('oshi-ready');

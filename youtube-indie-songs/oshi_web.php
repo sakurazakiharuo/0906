@@ -6,8 +6,9 @@
  *   oshi-callback.php                Google から戻ってきたとき（ログイン完了）
  *   oshi.php?action=logout           ログアウト
  *   oshi.php?action=me               ログイン状態と登録済みチャンネル（JSON。公開ページのボタン用）
- *   oshi.php?action=add / remove     初期推し登録・取り消し（POST・JSON）
- *   oshi.php                         自分の初期推し一覧
+ *   oshi.php?action=add / remove     MY推し登録・取り消し（POST・JSON）
+ *   oshi.php                         自分の MY推し一覧
+ *   ranking.php                      みんなの MY推しランキング（だれでも見られる）
  */
 
 date_default_timezone_set('Asia/Tokyo');
@@ -15,7 +16,9 @@ $config = require APP_DIR . '/config.php';
 require APP_DIR . '/functions.php';
 require APP_DIR . '/oshi_lib.php';
 
-header('X-Robots-Tag: noindex, nofollow');
+if (!defined('OSHI_RANKING')) {
+    header('X-Robots-Tag: noindex, nofollow'); // ランキング以外（ログイン・MY推し一覧）は検索に載せない
+}
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: same-origin');
@@ -44,6 +47,12 @@ function oshi_origin_host(string $origin): string
 $method = $_SERVER['REQUEST_METHOD'] ?? '';
 if ($method !== 'GET' && $method !== 'POST') {
     oshi_json(405, ['error' => 'method not allowed']);
+}
+
+if (defined('OSHI_RANKING')) {
+    $user = oshi_current_user();
+    require APP_DIR . '/oshi_ranking.php';
+    exit;
 }
 
 if (defined('OSHI_CALLBACK')) {
@@ -125,7 +134,7 @@ switch ($action) {
         $exists = $db->prepare('SELECT 1 FROM oshi WHERE user_id = ? AND channel_id = ?');
         $exists->execute([$user['id'], $channelId]);
         if ($exists->fetchColumn()) {
-            oshi_json(409, ['error' => 'このチャンネルはすでに初期推しに登録されています。']);
+            oshi_json(409, ['error' => 'このチャンネルはすでに MY推しに登録されています。']);
         }
         $count = $db->prepare('SELECT COUNT(*) FROM oshi WHERE user_id = ?');
         $count->execute([$user['id']]);
@@ -149,7 +158,7 @@ switch ($action) {
         oshi_json(400, ['error' => 'invalid action']);
 }
 
-// ---- 自分の初期推し一覧 ----
+// ---- 自分の MY推し一覧 ----
 $rows = [];
 if ($user) {
     $st = oshi_db()->prepare('SELECT * FROM oshi WHERE user_id = ? ORDER BY registered_at DESC');
@@ -168,7 +177,7 @@ header('Content-Type: text/html; charset=utf-8');
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>初期推し一覧</title>
+<title>MY推し一覧</title>
 <style>
   body { font-family: system-ui, "Hiragino Sans", "Noto Sans JP", sans-serif; margin: 0; padding: 16px; background: #fafafa; color: #222; }
   h1 { font-size: 1.3rem; margin: 0 0 4px; }
@@ -190,24 +199,24 @@ header('Content-Type: text/html; charset=utf-8');
 </style>
 </head>
 <body>
-<h1>初期推し一覧</h1>
+<h1>MY推し一覧</h1>
 <?php if (!$user): ?>
-  <p class="meta">初期推しの登録・一覧には Google アカウントでのログインが必要です。</p>
+  <p class="meta">MY推しの登録・一覧には Google アカウントでのログインが必要です。</p>
   <p><a class="btn" href="<?= h($self) ?>?action=login&amp;return=<?= h(rawurlencode($self)) ?>">Google でログイン</a></p>
   <p><a href="<?= h($base) ?>">← トップへ戻る</a></p>
 <?php else: ?>
-  <p class="meta"><?= h($user['name']) ?> さんの初期推し（<?= count($rows) ?> チャンネル）　｜　<a href="<?= h($base) ?>">トップへ戻る</a>　｜　<a href="<?= h($self) ?>?action=logout">ログアウト</a></p>
+  <p class="meta"><?= h($user['name']) ?> さんの MY推し（<?= count($rows) ?> チャンネル）　｜　<a href="<?= h($base) ?>">トップへ戻る</a>　｜　<a href="<?= h($base) ?>ranking.php">みんなのMY推しランキング</a>　｜　<a href="<?= h($self) ?>?action=logout">ログアウト</a></p>
   <form id="add-form" class="addf">
     <input type="text" id="add-url" placeholder="チャンネルの URL（例: https://www.youtube.com/@xxxx）や動画の URL" maxlength="300" required>
-    <button type="submit">初期推しに登録</button>
+    <button type="submit">MY推しに登録</button>
     <span id="add-msg" class="msg"></span>
   </form>
   <?php if (!$rows): ?>
-    <p>まだ初期推しがありません。上の入力欄か、リストの「＋初期推し」ボタンで登録できます。</p>
+    <p>まだ MY推しがありません。上の入力欄か、リストの「＋MY推し」ボタンで登録できます。</p>
   <?php else: ?>
   <div class="wrap">
   <table>
-    <thead><tr><th>チャンネル名</th><th>チャンネル開始日</th><th>現在の登録者数</th><th>初期推し登録日</th><th>登録時の登録者数</th><th>増えた人数</th><th></th></tr></thead>
+    <thead><tr><th>チャンネル名</th><th>チャンネル開始日</th><th>現在の登録者数</th><th>MY推し登録日</th><th>登録時の登録者数</th><th>増えた人数</th><th></th></tr></thead>
     <tbody>
     <?php foreach ($rows as $r):
         $cur = $now[$r['channel_id']] ?? null;
@@ -246,7 +255,7 @@ if (form) {
 }
 document.querySelectorAll('.rm').forEach(function (b) {
   b.addEventListener('click', function () {
-    if (!confirm('このチャンネルを初期推しから外しますか？')) return;
+    if (!confirm('このチャンネルを MY推しから外しますか？')) return;
     fetch(<?= json_encode($self) ?> + '?action=remove', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Oshi': '1' },
       body: JSON.stringify({ channel_id: b.dataset.channel }) })
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); b.closest('tr').remove(); })

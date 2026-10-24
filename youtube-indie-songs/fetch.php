@@ -493,7 +493,7 @@ function write_exclude_endpoint(array $config): string
 function write_oshi_endpoints(array $config): void
 {
     $dir = dirname($config['output_html']);
-    foreach (['oshi.php' => '', 'oshi-callback.php' => "define('OSHI_CALLBACK', true);\n"] as $name => $extra) {
+    foreach (['oshi.php' => '', 'oshi-callback.php' => "define('OSHI_CALLBACK', true);\n", 'ranking.php' => "define('OSHI_RANKING', true);\n"] as $name => $extra) {
         $code = "<?php\n// fetch.php が自動生成。編集しても次の実行で上書きされます\n"
             . 'define(\'APP_DIR\', ' . var_export(__DIR__, true) . ");\n"
             . $extra

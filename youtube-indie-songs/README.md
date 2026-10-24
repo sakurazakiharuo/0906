@@ -37,13 +37,14 @@ cron（毎朝7時）→ fetch.php（PHP CLI）→ YouTube Data API v3 → 静的
 - 除外ボタンの除外リストは全言語共通
 - config.php の `'languages' => ['zh' => [...], 'ko' => [...]]` で言語ごとの設定を上書きできる（例: `'watch_channels'`）。`'enabled_languages' => ['ja']` で日本語だけに戻せる
 
-## 初期推し（Google ログイン・初期推し登録・一覧）
+## MY推し（Google ログイン・MY推し登録・一覧・ランキング）
 
 - 公開ページ上部の「Google でログイン」で Google アカウントでログイン（OAuth 2.0 / OpenID Connect + PKCE。スコープは openid profile で、受け取るのはアカウント番号と表示名だけ。メールアドレスは受け取らない）
-- 各動画の「＋初期推し」でそのチャンネルを登録。押した瞬間の登録者数・チャンネル開設日・チャンネル名を YouTube に確認して保存（channels.list 1 ユニット）。もう一度押すと取り消し
-- `oshi.php` の入力欄にチャンネルの URL（youtube.com/@ハンドル・youtube.com/channel/UC…・youtube.com/user/…）、@ハンドル、または動画の URL（watch?v= / youtu.be / shorts）を入れて「初期推しに登録」でも登録できる（チャンネルを探すのに 1 ユニット。youtube.com/c/… の古い形式は API で探せないため非対応）
-- `oshi.php` で自分の初期推し一覧（チャンネル名・チャンネル開始日・現在の登録者数・初期推し登録日・登録時の登録者数・増えた人数）。現在の登録者数は表示のたびに YouTube に確認（50 件ごとに 1 ユニット）
-- 公開フォルダの `oshi.php`・`oshi-callback.php` は fetch.php が自動で作る。本体は `oshi_lib.php`・`oshi_web.php`
+- 各動画の「＋MY推し」でそのチャンネルを登録。押した瞬間の登録者数・チャンネル開設日・チャンネル名を YouTube に確認して保存（channels.list 1 ユニット）。もう一度押すと取り消し
+- `oshi.php` の入力欄にチャンネルの URL（youtube.com/@ハンドル・youtube.com/channel/UC…・youtube.com/user/…）、@ハンドル、または動画の URL（watch?v= / youtu.be / shorts）を入れて「初期推しに登録」でも登録できる（「MY推しに登録」ボタン。チャンネルを探すのに 1 ユニット。youtube.com/c/… の古い形式は API で探せないため非対応）
+- `oshi.php` で自分の MY推し一覧（チャンネル名・チャンネル開始日・現在の登録者数・MY推し登録日・登録時の登録者数・増えた人数）
+- `ranking.php` で「みんなのMY推しランキング」（MY推しに登録した人数の多い順。上位 100。順位・チャンネル名・MY推し数・現在の登録者数・最初に MY推しされた日とそのときの登録者数・増えた人数）。ログイン不要でだれでも見られ、検索エンジンにも載る。現在の登録者数は 1 時間キャッシュ（data/ranking_cache.json）。本体は `oshi_ranking.php`。現在の登録者数は表示のたびに YouTube に確認（50 件ごとに 1 ユニット）
+- 公開フォルダの `oshi.php`・`oshi-callback.php`・`ranking.php` は fetch.php が自動で作る。本体は `oshi_lib.php`・`oshi_web.php`
 - 保存先は `~/youtube-indie-songs/data/`（SQLite の oshi.sqlite と、Cookie 署名用の secret.key。どちらも自動で作る）
 - ログイン状態は PHP のセッションを使わず、署名付き Cookie（HttpOnly・Secure・SameSite=Lax、30 日）。Google のアクセストークンは保存しない
 - 登録・取り消しは同じサイトからの JSON 送信だけ受け付ける（他サイトから勝手に登録させられないように）
