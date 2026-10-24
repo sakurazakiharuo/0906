@@ -489,6 +489,21 @@ function write_exclude_endpoint(array $config): string
     return $path;
 }
 
+// 初期推し機能の入り口（公開ページと同じフォルダに自動で置く。中身はこのアプリのフォルダの oshi_web.php）
+function write_oshi_endpoints(array $config): void
+{
+    $dir = dirname($config['output_html']);
+    foreach (['oshi.php' => '', 'oshi-callback.php' => "define('OSHI_CALLBACK', true);\n"] as $name => $extra) {
+        $code = "<?php\n// fetch.php が自動生成。編集しても次の実行で上書きされます\n"
+            . 'define(\'APP_DIR\', ' . var_export(__DIR__, true) . ");\n"
+            . $extra
+            . "require APP_DIR . '/oshi_web.php';\n";
+        if (!is_file("$dir/$name") || file_get_contents("$dir/$name") !== $code) {
+            file_put_contents("$dir/$name", $code);
+        }
+    }
+}
+
 // ---- 実行 ----
 $profiles = language_profiles($config);
 $exclusions = load_exclusions();
@@ -496,6 +511,10 @@ $searchHits = search_all_languages($profiles, $config, $apiKey);
 $results = [];
 foreach ($profiles as $code => $P) {
     $results[$code] = process_language($P, $config, $apiKey, $exclusions, $searchHits[$code]);
+}
+
+if ($config['oshi_enabled'] ?? true) {
+    write_oshi_endpoints($config);
 }
 
 // タブ（各言語のページへのリンク）

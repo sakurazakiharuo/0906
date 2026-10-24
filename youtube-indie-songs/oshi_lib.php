@@ -1,0 +1,208 @@
+<?php
+/**
+ * 初期推し機能の部品: データベース・ログイン状態（署名付き Cookie）・X の OAuth 2.0・YouTube のチャンネル情報
+ *
+ * ログイン状態は PHP のセッションを使わず、改ざんできない署名付き Cookie で持つ
+ * （サーバにセッションファイルを作らない。PHP2Shell で狙われたセッション周りの機能も使わない）
+ */
+
+const OSHI_COOKIE = 'oshi_auth';
+const OSHI_OAUTH_COOKIE = 'oshi_oauth';
+const OSHI_MAX_PER_USER = 1000;
+
+function oshi_data_dir(): string
+{
+    $dir = APP_DIR . '/data';
+    if (!is_dir($dir)) {
+        mkdir($dir, 0700, true);
+    }
+    return $dir;
+}
+
+// Cookie の署名に使う秘密の鍵（初回に自動で作り、data/secret.key に保存）
+function oshi_secret(): string
+{
+    $file = oshi_data_dir() . '/secret.key';
+    if (!is_file($file)) {
+        file_put_contents($file, bin2hex(random_bytes(32)));
+        chmod($file, 0600);
+    }
+    return trim(file_get_contents($file));
+}
+
+function oshi_db(): PDO
+{
+    static $pdo = null;
+    if ($pdo) {
+        return $pdo;
+    }
+    $pdo = new PDO('sqlite:' . oshi_data_dir() . '/oshi.sqlite', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $pdo->exec('PRAGMA busy_timeout = 5000');
+    $pdo->exec('CREATE TABLE IF NOT EXISTS users (
+        x_id TEXT PRIMARY KEY, username TEXT NOT NULL, name TEXT NOT NULL DEFAULT "",
+        created_at TEXT NOT NULL, last_login TEXT NOT NULL)');
+    $pdo->exec('CREATE TABLE IF NOT EXISTS oshi (
+        user_id TEXT NOT NULL, channel_id TEXT NOT NULL,
+        channel_title TEXT NOT NULL DEFAULT "", channel_published TEXT NOT NULL DEFAULT "",
+        subs_at_registration INTEGER, hidden_at_registration INTEGER NOT NULL DEFAULT 0,
+        registered_at TEXT NOT NULL,
+        PRIMARY KEY (user_id, channel_id))');
+    return $pdo;
+}
+
+// ---- 署名付きの値（Cookie 用） ----
+
+function oshi_sign(array $data): string
+{
+    $payload = rtrim(strtr(base64_encode(json_encode($data)), '+/', '-_'), '=');
+    return $payload . '.' . hash_hmac('sha256', $payload, oshi_secret());
+}
+
+function oshi_verify(string $value): ?array
+{
+    $parts = explode('.', $value);
+    if (count($parts) !== 2 || !hash_equals(hash_hmac('sha256', $parts[0], oshi_secret()), $parts[1])) {
+        return null;
+    }
+    $data = json_decode(base64_decode(strtr($parts[0], '-_', '+/')), true);
+    if (!is_array($data) || ($data['exp'] ?? 0) < time()) {
+        return null;
+    }
+    return $data;
+}
+
+function oshi_set_cookie(string $name, string $value, int $ttl): void
+{
+    setcookie($name, $value, [
+        'expires' => $ttl > 0 ? time() + $ttl : time() - 3600,
+        'path' => '/',
+        'secure' => true,
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
+}
+
+// ログイン中のユーザー（['id', 'username']）。ログインしていなければ null
+function oshi_current_user(): ?array
+{
+    $raw = $_COOKIE[OSHI_COOKIE] ?? '';
+    if (!is_string($raw) || $raw === '' || strlen($raw) > 1000) {
+        return null;
+    }
+    $data = oshi_verify($raw);
+    return ($data && isset($data['id'], $data['username'])) ? ['id' => (string)$data['id'], 'username' => (string)$data['username']] : null;
+}
+
+// ---- HTTP ----
+
+function oshi_http(string $method, string $url, array $headers = [], ?string $body = null): array
+{
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 20,
+        CURLOPT_CUSTOMREQUEST => $method,
+        CURLOPT_HTTPHEADER => $headers,
+    ]);
+    if ($body !== null) {
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+    }
+    $res = curl_exec($ch);
+    $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    return [$status, $res === false ? null : json_decode($res, true)];
+}
+
+// ---- X の OAuth 2.0（Authorization Code + PKCE） ----
+
+function oshi_x_settings(array $config): array
+{
+    $site = rtrim($config['site_url'] ?? 'https://song.nakamurakozo.tv/', '/') . '/';
+    return [
+        'client_id' => $config['x_client_id'] ?? '',
+        'client_secret' => $config['x_client_secret'] ?? '',
+        'redirect_uri' => $config['x_redirect_uri'] ?? $site . 'oshi-callback.php',
+        'authorize_url' => $config['x_authorize_url'] ?? 'https://x.com/i/oauth2/authorize',
+        'token_url' => $config['x_token_url'] ?? 'https://api.x.com/2/oauth2/token',
+        'me_url' => $config['x_me_url'] ?? 'https://api.x.com/2/users/me',
+        'site' => $site,
+    ];
+}
+
+// X のログイン画面の URL を作り、確認用の値（state と PKCE の code_verifier）を短時間だけ Cookie に入れる
+function oshi_login_url(array $config, string $return): string
+{
+    $x = oshi_x_settings($config);
+    $state = bin2hex(random_bytes(16));
+    $verifier = rtrim(strtr(base64_encode(random_bytes(48)), '+/', '-_'), '=');
+    $challenge = rtrim(strtr(base64_encode(hash('sha256', $verifier, true)), '+/', '-_'), '=');
+    oshi_set_cookie(OSHI_OAUTH_COOKIE, oshi_sign(['state' => $state, 'verifier' => $verifier, 'return' => $return, 'exp' => time() + 600]), 600);
+    return $x['authorize_url'] . '?' . http_build_query([
+        'response_type' => 'code',
+        'client_id' => $x['client_id'],
+        'redirect_uri' => $x['redirect_uri'],
+        'scope' => 'users.read tweet.read',
+        'state' => $state,
+        'code_challenge' => $challenge,
+        'code_challenge_method' => 'S256',
+    ]);
+}
+
+// X から戻ってきたときの処理。成功したらユーザー情報、失敗したらエラーの文字列を返す
+function oshi_handle_callback(array $config, array $query)
+{
+    $x = oshi_x_settings($config);
+    $saved = oshi_verify(is_string($_COOKIE[OSHI_OAUTH_COOKIE] ?? null) ? $_COOKIE[OSHI_OAUTH_COOKIE] : '');
+    oshi_set_cookie(OSHI_OAUTH_COOKIE, '', 0);
+    $code = $query['code'] ?? '';
+    $state = $query['state'] ?? '';
+    if (!$saved || !is_string($code) || !is_string($state) || $code === '' || !hash_equals($saved['state'], $state)) {
+        return 'ログインの確認に失敗しました。もう一度お試しください。';
+    }
+    [$status, $token] = oshi_http('POST', $x['token_url'], [
+        'Content-Type: application/x-www-form-urlencoded',
+        'Authorization: Basic ' . base64_encode($x['client_id'] . ':' . $x['client_secret']),
+    ], http_build_query([
+        'grant_type' => 'authorization_code',
+        'code' => $code,
+        'redirect_uri' => $x['redirect_uri'],
+        'code_verifier' => $saved['verifier'],
+        'client_id' => $x['client_id'],
+    ]));
+    if ($status !== 200 || empty($token['access_token'])) {
+        return "X からアクセス許可を受け取れませんでした（HTTP $status）。";
+    }
+    [$status, $me] = oshi_http('GET', $x['me_url'], ['Authorization: Bearer ' . $token['access_token']]);
+    $user = $me['data'] ?? null;
+    if ($status !== 200 || empty($user['id']) || empty($user['username'])) {
+        return "X のアカウント情報を取得できませんでした（HTTP $status）。";
+    }
+    // アクセストークンは保存しない（ログインの確認にだけ使う）
+    $now = date('Y-m-d H:i:s');
+    oshi_db()->prepare('INSERT INTO users (x_id, username, name, created_at, last_login) VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(x_id) DO UPDATE SET username = excluded.username, name = excluded.name, last_login = excluded.last_login')
+        ->execute([$user['id'], $user['username'], $user['name'] ?? '', $now, $now]);
+    oshi_set_cookie(OSHI_COOKIE, oshi_sign(['id' => $user['id'], 'username' => $user['username'], 'exp' => time() + 30 * 86400]), 30 * 86400);
+    return ['id' => $user['id'], 'username' => $user['username'], 'return' => $saved['return']];
+}
+
+// ---- YouTube ----
+
+// チャンネル情報（タイトル・開設日・登録者数）を YouTube に問い合わせる（channels.list: 1 ユニット/50 件）
+function oshi_youtube_channels(array $config, array $ids): array
+{
+    $out = [];
+    foreach (array_chunk(array_values(array_unique($ids)), 50) as $chunk) {
+        [$status, $res] = oshi_http('GET', 'https://www.googleapis.com/youtube/v3/channels?' . http_build_query([
+            'key' => $config['api_key'], 'part' => 'snippet,statistics', 'id' => implode(',', $chunk),
+        ]));
+        foreach (($status === 200 ? $res['items'] ?? [] : []) as $c) {
+            $out[$c['id']] = [
+                'title' => $c['snippet']['title'] ?? '',
+                'published' => isset($c['snippet']['publishedAt']) ? date('Y-m-d', strtotime($c['snippet']['publishedAt'])) : '',
+                'subs' => !empty($c['statistics']['hiddenSubscriberCount']) ? null : (int)($c['statistics']['subscriberCount'] ?? 0),
+            ];
+        }
+    }
+    return $out;
+}

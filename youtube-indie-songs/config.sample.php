@@ -71,4 +71,12 @@ return [
 
     // 1キーワードあたりの検索ページ数（1ページ=50件、100ユニット消費）
     'pages_per_keyword' => 4,
+
+    // ---- 初期推し（X ログイン・初期推し登録・一覧） ----
+    'oshi_enabled' => true,
+    // サイトの URL（最後は /）。X のログイン後に戻る先は site_url + 'oshi-callback.php'
+    'site_url' => 'https://song.nakamurakozo.tv/',
+    // X の開発者コンソールで作ったアプリの OAuth 2.0 の Client ID / Client Secret
+    'x_client_id' => '',
+    'x_client_secret' => '',
 ];

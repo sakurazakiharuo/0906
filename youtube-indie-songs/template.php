@@ -52,6 +52,13 @@ $U = $P['ui'];
   .xbtn { display: inline-block; font-size: .75rem; background: #000; color: #fff; border-radius: 999px; padding: 3px 10px; white-space: nowrap; }
   .xbtn:hover { text-decoration: none; opacity: .85; }
   .pick .xbtn { margin-top: 8px; }
+  .oshibtn { display: none; font-size: .75rem; background: #fff; color: #c00; border: 1px solid #c00; border-radius: 999px; padding: 2px 9px; margin-left: 4px; cursor: pointer; white-space: nowrap; }
+  .oshi-ready .oshibtn { display: inline-block; }
+  .oshibtn.on { background: #c00; color: #fff; }
+  #oshi-bar { display: none; font-size: .85rem; margin: -4px 0 12px; }
+  .oshi-ready #oshi-bar { display: block; }
+  #oshi-bar .note { color: #666; font-size: .8rem; margin-left: 6px; }
+  #oshi-bar .login { display: inline-block; background: #000; color: #fff; border-radius: 999px; padding: 3px 12px; }
   .mebuki td.rank { font-weight: bold; color: #2a7a2a; }
 </style>
 </head>
@@ -63,6 +70,8 @@ $U = $P['ui'];
   <a href="<?= h($t['href']) ?>" hreflang="<?= h($t['code'] === 'zh' ? 'zh-Hant' : $t['code']) ?>"<?= $t['code'] === $P['code'] ? ' class="active"' : '' ?>><?= h($t['label']) ?></a>
 <?php endforeach; ?>
 </nav>
+
+<div id="oshi-bar"></div>
 
 <p class="meta">
   <?= h(sprintf($U['meta'], $config['min_subscribers'], $config['max_subscribers'], $config['days'], $updatedAt, count($rows))) ?>
@@ -79,7 +88,7 @@ $U = $P['ui'];
     <?php if ($p['x_handle']): ?><a class="a" href="https://x.com/<?= h($p['x_handle']) ?>" target="_blank" rel="noopener">@<?= h($p['x_handle']) ?></a><?php endif; ?>
     <div class="s"><?= h(sprintf($U['stats'], number_format($p['subscribers']), number_format($p['views']))) ?> ・ <?= h($p['published']) ?></div>
     <?php foreach ($p['reason_labels'] as $r): ?><span class="tag"><?= h($r) ?></span><?php endforeach; ?>
-    <div><a class="xbtn" href="https://x.com/intent/post" target="_blank" rel="noopener" data-text="<?= h($p['post_text']) ?>"><?= h($U['xbtn']) ?></a></div>
+    <div><a class="xbtn" href="https://x.com/intent/post" target="_blank" rel="noopener" data-text="<?= h($p['post_text']) ?>"><?= h($U['xbtn']) ?></a><button type="button" class="oshibtn" data-channel="<?= h($p['channel_id']) ?>"><?= h($U['oshi_add']) ?></button></div>
   </div>
 <?php endforeach; ?>
 </div>
@@ -102,7 +111,7 @@ $U = $P['ui'];
       <td><a href="<?= h($m['url']) ?>" target="_blank" rel="noopener"><?= h($m['title']) ?></a></td>
       <td class="num"><?= number_format($m['views']) ?></td>
       <td class="num"><?= h($m['published']) ?></td>
-      <td><a class="xbtn" href="https://x.com/intent/post" target="_blank" rel="noopener" data-text="<?= h($m['post_text']) ?>"><?= h($U['xbtn']) ?></a></td>
+      <td><a class="xbtn" href="https://x.com/intent/post" target="_blank" rel="noopener" data-text="<?= h($m['post_text']) ?>"><?= h($U['xbtn']) ?></a><button type="button" class="oshibtn" data-channel="<?= h($m['channel_id']) ?>"><?= h($U['oshi_add']) ?></button></td>
     </tr>
   <?php endforeach; ?>
   </tbody>
@@ -128,7 +137,7 @@ $U = $P['ui'];
       <td><a href="<?= h($r['url']) ?>" target="_blank" rel="noopener"><?= h($r['title']) ?></a></td>
       <td class="num"><?= number_format($r['views']) ?></td>
       <td class="num"><?= h($r['published']) ?></td>
-      <td><a class="xbtn" href="https://x.com/intent/post" target="_blank" rel="noopener" data-text="<?= h($r['post_text']) ?>"><?= h($U['xbtn']) ?></a></td>
+      <td><a class="xbtn" href="https://x.com/intent/post" target="_blank" rel="noopener" data-text="<?= h($r['post_text']) ?>"><?= h($U['xbtn']) ?></a><button type="button" class="oshibtn" data-channel="<?= h($r['channel_id']) ?>"><?= h($U['oshi_add']) ?></button></td>
     </tr>
   <?php endforeach; ?>
   </tbody>
@@ -141,6 +150,56 @@ document.addEventListener('click', function (e) {
   var a = e.target.closest('a.xbtn');
   if (a) a.href = 'https://x.com/intent/post?text=' + encodeURIComponent(a.dataset.text);
 });
+
+// 初期推し: ログイン状態を確かめ、ボタンを表示する（oshi.php がない・動かないときは何も出さない）
+(function () {
+  var T = <?= json_encode(['login' => $U['login'], 'logout' => $U['logout'], 'mylist' => $U['mylist'], 'add' => $U['oshi_add'], 'added' => $U['oshi_added'], 'note' => $U['login_note']], JSON_UNESCAPED_UNICODE) ?>;
+  var here = location.pathname;
+  var state = { logged_in: false, oshi: {} };
+  function el(tag, attrs, text) { var e = document.createElement(tag); for (var k in attrs) e.setAttribute(k, attrs[k]); if (text) e.textContent = text; return e; }
+  function paint() {
+    document.querySelectorAll('.oshibtn').forEach(function (b) {
+      var on = !!state.oshi[b.dataset.channel];
+      b.classList.toggle('on', on);
+      b.textContent = on ? T.added : T.add;
+    });
+  }
+  function send(action, channel) {
+    return fetch('oshi.php?action=' + action, { method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-Oshi': '1' }, body: JSON.stringify({ channel_id: channel }) })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
+  }
+  fetch('oshi.php?action=me', { credentials: 'same-origin' })
+    .then(function (r) { if (!r.ok) throw new Error(); return r.json(); })
+    .then(function (me) {
+      state.logged_in = !!me.logged_in;
+      (me.oshi || []).forEach(function (c) { state.oshi[c] = true; });
+      var bar = document.getElementById('oshi-bar');
+      if (me.logged_in) {
+        bar.appendChild(document.createTextNode('@' + me.username + '　｜　'));
+        bar.appendChild(el('a', { href: 'oshi.php' }, T.mylist));
+        bar.appendChild(document.createTextNode('　｜　'));
+        bar.appendChild(el('a', { href: 'oshi.php?action=logout&return=' + encodeURIComponent(here) }, T.logout));
+      } else {
+        bar.appendChild(el('a', { class: 'login', href: 'oshi.php?action=login&return=' + encodeURIComponent(here) }, T.login));
+        bar.appendChild(el('span', { class: 'note' }, T.note));
+      }
+      paint();
+      document.body.classList.add('oshi-ready');
+    })
+    .catch(function () {});
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('.oshibtn');
+    if (!b) return;
+    if (!state.logged_in) { location.href = 'oshi.php?action=login&return=' + encodeURIComponent(here); return; }
+    var c = b.dataset.channel, on = !!state.oshi[c];
+    b.disabled = true;
+    send(on ? 'remove' : 'add', c)
+      .then(function () { if (on) delete state.oshi[c]; else state.oshi[c] = true; paint(); })
+      .catch(function (err) { alert(err.message); })
+      .then(function () { b.disabled = false; });
+  });
+})();
 </script>
 </body>
 </html>
