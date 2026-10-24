@@ -176,7 +176,7 @@ document.addEventListener('click', function (e) {
       (me.oshi || []).forEach(function (c) { state.oshi[c] = true; });
       var bar = document.getElementById('oshi-bar');
       if (me.logged_in) {
-        bar.appendChild(document.createTextNode('@' + me.username + '　｜　'));
+        bar.appendChild(document.createTextNode(me.name + '　｜　'));
         bar.appendChild(el('a', { href: 'oshi.php' }, T.mylist));
         bar.appendChild(document.createTextNode('　｜　'));
         bar.appendChild(el('a', { href: 'oshi.php?action=logout&return=' + encodeURIComponent(here) }, T.logout));

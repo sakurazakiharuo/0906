@@ -2,8 +2,8 @@
 /**
  * 初期推し機能の入り口（公開フォルダの oshi.php・oshi-callback.php から読み込まれる。fetch.php が自動で作る）
  *
- *   oshi.php?action=login&return=…  X のログイン画面へ
- *   oshi-callback.php                X から戻ってきたとき（ログイン完了）
+ *   oshi.php?action=login&return=…  Google のログイン画面へ
+ *   oshi-callback.php                Google から戻ってきたとき（ログイン完了）
  *   oshi.php?action=logout           ログアウト
  *   oshi.php?action=me               ログイン状態と登録済みチャンネル（JSON。公開ページのボタン用）
  *   oshi.php?action=add / remove     初期推し登録・取り消し（POST・JSON）
@@ -67,8 +67,8 @@ $user = oshi_current_user();
 
 switch ($action) {
     case 'login':
-        if (($config['x_client_id'] ?? '') === '') {
-            oshi_json(503, ['error' => 'X ログインの設定（x_client_id）がありません']);
+        if (($config['google_client_id'] ?? '') === '') {
+            oshi_json(503, ['error' => 'Google ログインの設定（google_client_id）がありません']);
         }
         header('Location: ' . oshi_login_url($config, oshi_safe_return($_GET['return'] ?? '/')));
         exit;
@@ -84,7 +84,7 @@ switch ($action) {
         }
         $st = oshi_db()->prepare('SELECT channel_id FROM oshi WHERE user_id = ?');
         $st->execute([$user['id']]);
-        oshi_json(200, ['logged_in' => true, 'username' => $user['username'], 'oshi' => $st->fetchAll(PDO::FETCH_COLUMN)]);
+        oshi_json(200, ['logged_in' => true, 'name' => $user['name'], 'oshi' => $st->fetchAll(PDO::FETCH_COLUMN)]);
 
     case 'add':
     case 'remove':
@@ -171,11 +171,11 @@ header('Content-Type: text/html; charset=utf-8');
 <body>
 <h1>初期推し一覧</h1>
 <?php if (!$user): ?>
-  <p class="meta">初期推しの登録・一覧には X アカウントでのログインが必要です。</p>
-  <p><a class="btn" href="<?= h($self) ?>?action=login&amp;return=<?= h(rawurlencode($self)) ?>">𝕏 でログイン</a></p>
+  <p class="meta">初期推しの登録・一覧には Google アカウントでのログインが必要です。</p>
+  <p><a class="btn" href="<?= h($self) ?>?action=login&amp;return=<?= h(rawurlencode($self)) ?>">Google でログイン</a></p>
   <p><a href="<?= h($base) ?>">← トップへ戻る</a></p>
 <?php else: ?>
-  <p class="meta">@<?= h($user['username']) ?> さんの初期推し（<?= count($rows) ?> チャンネル）　｜　<a href="<?= h($base) ?>">トップへ戻る</a>　｜　<a href="<?= h($self) ?>?action=logout">ログアウト</a></p>
+  <p class="meta"><?= h($user['name']) ?> さんの初期推し（<?= count($rows) ?> チャンネル）　｜　<a href="<?= h($base) ?>">トップへ戻る</a>　｜　<a href="<?= h($self) ?>?action=logout">ログアウト</a></p>
   <?php if (!$rows): ?>
     <p>まだ初期推しがありません。リストの「＋初期推し」ボタンで登録できます。</p>
   <?php else: ?>

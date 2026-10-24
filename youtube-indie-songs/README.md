@@ -37,17 +37,17 @@ cron（毎朝7時）→ fetch.php（PHP CLI）→ YouTube Data API v3 → 静的
 - 除外ボタンの除外リストは全言語共通
 - config.php の `'languages' => ['zh' => [...], 'ko' => [...]]` で言語ごとの設定を上書きできる（例: `'watch_channels'`）。`'enabled_languages' => ['ja']` で日本語だけに戻せる
 
-## 初期推し（X ログイン・初期推し登録・一覧）
+## 初期推し（Google ログイン・初期推し登録・一覧）
 
-- 公開ページ上部の「𝕏 でログイン」で X アカウントでログイン（OAuth 2.0 + PKCE。スコープは users.read tweet.read）
+- 公開ページ上部の「Google でログイン」で Google アカウントでログイン（OAuth 2.0 / OpenID Connect + PKCE。スコープは openid profile で、受け取るのはアカウント番号と表示名だけ。メールアドレスは受け取らない）
 - 各動画の「＋初期推し」でそのチャンネルを登録。押した瞬間の登録者数・チャンネル開設日・チャンネル名を YouTube に確認して保存（channels.list 1 ユニット）。もう一度押すと取り消し
 - `oshi.php` で自分の初期推し一覧（チャンネル名・チャンネル開始日・現在の登録者数・初期推し登録日・登録時の登録者数・増えた人数）。現在の登録者数は表示のたびに YouTube に確認（50 件ごとに 1 ユニット）
 - 公開フォルダの `oshi.php`・`oshi-callback.php` は fetch.php が自動で作る。本体は `oshi_lib.php`・`oshi_web.php`
 - 保存先は `~/youtube-indie-songs/data/`（SQLite の oshi.sqlite と、Cookie 署名用の secret.key。どちらも自動で作る）
-- ログイン状態は PHP のセッションを使わず、署名付き Cookie（HttpOnly・Secure・SameSite=Lax、30 日）。X のアクセストークンは保存しない
+- ログイン状態は PHP のセッションを使わず、署名付き Cookie（HttpOnly・Secure・SameSite=Lax、30 日）。Google のアクセストークンは保存しない
 - 登録・取り消しは同じサイトからの JSON 送信だけ受け付ける（他サイトから勝手に登録させられないように）
-- 設定（config.php）: `site_url`, `x_client_id`, `x_client_secret`（X の開発者コンソールで作るアプリの OAuth 2.0 の値）。コールバック URL は site_url + `oshi-callback.php`
-- X の API 呼び出しはログイン時に /2/users/me を 1 回だけ。従量課金のため X 側でクレジットが必要な場合がある
+- 設定（config.php）: `site_url`, `google_client_id`, `google_client_secret`（Google Cloud Console の OAuth クライアント「ウェブ アプリケーション」の値）。承認済みのリダイレクト URI は site_url + `oshi-callback.php`
+- Google ログインは無料
 
 ## 候補動画の集め方
 

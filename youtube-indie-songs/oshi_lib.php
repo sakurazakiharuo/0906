@@ -1,6 +1,6 @@
 <?php
 /**
- * 初期推し機能の部品: データベース・ログイン状態（署名付き Cookie）・X の OAuth 2.0・YouTube のチャンネル情報
+ * 初期推し機能の部品: データベース・ログイン状態（署名付き Cookie）・Google ログイン（OpenID Connect）・YouTube のチャンネル情報
  *
  * ログイン状態は PHP のセッションを使わず、改ざんできない署名付き Cookie で持つ
  * （サーバにセッションファイルを作らない。PHP2Shell で狙われたセッション周りの機能も使わない）
@@ -38,8 +38,9 @@ function oshi_db(): PDO
     }
     $pdo = new PDO('sqlite:' . oshi_data_dir() . '/oshi.sqlite', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
     $pdo->exec('PRAGMA busy_timeout = 5000');
-    $pdo->exec('CREATE TABLE IF NOT EXISTS users (
-        x_id TEXT PRIMARY KEY, username TEXT NOT NULL, name TEXT NOT NULL DEFAULT "",
+    // id は「google:」＋ Google アカウントの番号（sub）
+    $pdo->exec('CREATE TABLE IF NOT EXISTS accounts (
+        id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT "",
         created_at TEXT NOT NULL, last_login TEXT NOT NULL)');
     $pdo->exec('CREATE TABLE IF NOT EXISTS oshi (
         user_id TEXT NOT NULL, channel_id TEXT NOT NULL,
@@ -82,7 +83,7 @@ function oshi_set_cookie(string $name, string $value, int $ttl): void
     ]);
 }
 
-// ログイン中のユーザー（['id', 'username']）。ログインしていなければ null
+// ログイン中のユーザー（['id', 'name']）。ログインしていなければ null
 function oshi_current_user(): ?array
 {
     $raw = $_COOKIE[OSHI_COOKIE] ?? '';
@@ -90,7 +91,7 @@ function oshi_current_user(): ?array
         return null;
     }
     $data = oshi_verify($raw);
-    return ($data && isset($data['id'], $data['username'])) ? ['id' => (string)$data['id'], 'username' => (string)$data['username']] : null;
+    return ($data && isset($data['id'], $data['name'])) ? ['id' => (string)$data['id'], 'name' => (string)$data['name']] : null;
 }
 
 // ---- HTTP ----
@@ -113,45 +114,47 @@ function oshi_http(string $method, string $url, array $headers = [], ?string $bo
     return [$status, $res === false ? null : json_decode($res, true)];
 }
 
-// ---- X の OAuth 2.0（Authorization Code + PKCE） ----
+// ---- Google ログイン（OAuth 2.0 / OpenID Connect、Authorization Code + PKCE） ----
 
-function oshi_x_settings(array $config): array
+function oshi_google_settings(array $config): array
 {
     $site = rtrim($config['site_url'] ?? 'https://song.nakamurakozo.tv/', '/') . '/';
     return [
-        'client_id' => $config['x_client_id'] ?? '',
-        'client_secret' => $config['x_client_secret'] ?? '',
-        'redirect_uri' => $config['x_redirect_uri'] ?? $site . 'oshi-callback.php',
-        'authorize_url' => $config['x_authorize_url'] ?? 'https://x.com/i/oauth2/authorize',
-        'token_url' => $config['x_token_url'] ?? 'https://api.x.com/2/oauth2/token',
-        'me_url' => $config['x_me_url'] ?? 'https://api.x.com/2/users/me',
+        'client_id' => $config['google_client_id'] ?? '',
+        'client_secret' => $config['google_client_secret'] ?? '',
+        'redirect_uri' => $config['google_redirect_uri'] ?? $site . 'oshi-callback.php',
+        'authorize_url' => $config['google_authorize_url'] ?? 'https://accounts.google.com/o/oauth2/v2/auth',
+        'token_url' => $config['google_token_url'] ?? 'https://oauth2.googleapis.com/token',
+        'userinfo_url' => $config['google_userinfo_url'] ?? 'https://openidconnect.googleapis.com/v1/userinfo',
         'site' => $site,
     ];
 }
 
-// X のログイン画面の URL を作り、確認用の値（state と PKCE の code_verifier）を短時間だけ Cookie に入れる
+// Google のログイン画面の URL を作り、確認用の値（state と PKCE の code_verifier）を短時間だけ Cookie に入れる
+// 受け取る情報は Google アカウントの番号と表示名だけ（scope: openid profile。メールアドレスは受け取らない）
 function oshi_login_url(array $config, string $return): string
 {
-    $x = oshi_x_settings($config);
+    $g = oshi_google_settings($config);
     $state = bin2hex(random_bytes(16));
     $verifier = rtrim(strtr(base64_encode(random_bytes(48)), '+/', '-_'), '=');
     $challenge = rtrim(strtr(base64_encode(hash('sha256', $verifier, true)), '+/', '-_'), '=');
     oshi_set_cookie(OSHI_OAUTH_COOKIE, oshi_sign(['state' => $state, 'verifier' => $verifier, 'return' => $return, 'exp' => time() + 600]), 600);
-    return $x['authorize_url'] . '?' . http_build_query([
+    return $g['authorize_url'] . '?' . http_build_query([
         'response_type' => 'code',
-        'client_id' => $x['client_id'],
-        'redirect_uri' => $x['redirect_uri'],
-        'scope' => 'users.read tweet.read',
+        'client_id' => $g['client_id'],
+        'redirect_uri' => $g['redirect_uri'],
+        'scope' => 'openid profile',
         'state' => $state,
         'code_challenge' => $challenge,
         'code_challenge_method' => 'S256',
+        'prompt' => 'select_account',
     ]);
 }
 
-// X から戻ってきたときの処理。成功したらユーザー情報、失敗したらエラーの文字列を返す
+// Google から戻ってきたときの処理。成功したらユーザー情報、失敗したらエラーの文字列を返す
 function oshi_handle_callback(array $config, array $query)
 {
-    $x = oshi_x_settings($config);
+    $g = oshi_google_settings($config);
     $saved = oshi_verify(is_string($_COOKIE[OSHI_OAUTH_COOKIE] ?? null) ? $_COOKIE[OSHI_OAUTH_COOKIE] : '');
     oshi_set_cookie(OSHI_OAUTH_COOKIE, '', 0);
     $code = $query['code'] ?? '';
@@ -159,31 +162,33 @@ function oshi_handle_callback(array $config, array $query)
     if (!$saved || !is_string($code) || !is_string($state) || $code === '' || !hash_equals($saved['state'], $state)) {
         return 'ログインの確認に失敗しました。もう一度お試しください。';
     }
-    [$status, $token] = oshi_http('POST', $x['token_url'], [
-        'Content-Type: application/x-www-form-urlencoded',
-        'Authorization: Basic ' . base64_encode($x['client_id'] . ':' . $x['client_secret']),
-    ], http_build_query([
+    [$status, $token] = oshi_http('POST', $g['token_url'], ['Content-Type: application/x-www-form-urlencoded'], http_build_query([
         'grant_type' => 'authorization_code',
         'code' => $code,
-        'redirect_uri' => $x['redirect_uri'],
+        'redirect_uri' => $g['redirect_uri'],
         'code_verifier' => $saved['verifier'],
-        'client_id' => $x['client_id'],
+        'client_id' => $g['client_id'],
+        'client_secret' => $g['client_secret'],
     ]));
     if ($status !== 200 || empty($token['access_token'])) {
-        return "X からアクセス許可を受け取れませんでした（HTTP $status）。";
+        return "Google からアクセス許可を受け取れませんでした（HTTP $status）。";
     }
-    [$status, $me] = oshi_http('GET', $x['me_url'], ['Authorization: Bearer ' . $token['access_token']]);
-    $user = $me['data'] ?? null;
-    if ($status !== 200 || empty($user['id']) || empty($user['username'])) {
-        return "X のアカウント情報を取得できませんでした（HTTP $status）。";
+    [$status, $info] = oshi_http('GET', $g['userinfo_url'], ['Authorization: Bearer ' . $token['access_token']]);
+    if ($status !== 200 || empty($info['sub'])) {
+        return "Google のアカウント情報を取得できませんでした（HTTP $status）。";
     }
     // アクセストークンは保存しない（ログインの確認にだけ使う）
+    $id = 'google:' . $info['sub'];
+    $name = mb_substr((string)($info['name'] ?? $info['given_name'] ?? ''), 0, 50, 'UTF-8');
+    if ($name === '') {
+        $name = 'ユーザー';
+    }
     $now = date('Y-m-d H:i:s');
-    oshi_db()->prepare('INSERT INTO users (x_id, username, name, created_at, last_login) VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(x_id) DO UPDATE SET username = excluded.username, name = excluded.name, last_login = excluded.last_login')
-        ->execute([$user['id'], $user['username'], $user['name'] ?? '', $now, $now]);
-    oshi_set_cookie(OSHI_COOKIE, oshi_sign(['id' => $user['id'], 'username' => $user['username'], 'exp' => time() + 30 * 86400]), 30 * 86400);
-    return ['id' => $user['id'], 'username' => $user['username'], 'return' => $saved['return']];
+    oshi_db()->prepare('INSERT INTO accounts (id, name, created_at, last_login) VALUES (?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET name = excluded.name, last_login = excluded.last_login')
+        ->execute([$id, $name, $now, $now]);
+    oshi_set_cookie(OSHI_COOKIE, oshi_sign(['id' => $id, 'name' => $name, 'exp' => time() + 30 * 86400]), 30 * 86400);
+    return ['id' => $id, 'name' => $name, 'return' => $saved['return']];
 }
 
 // ---- YouTube ----
