@@ -12,9 +12,44 @@
  */
 
 date_default_timezone_set('Asia/Tokyo');
+// PHP のエラーで止まったときも、空の返事にせず JSON（ボタン用）か文章でエラー内容を返し、data/error.log に記録する
+// （サーバの設定でエラーが画面に出ないため、そのままだと「Unexpected end of JSON input」としか分からない）
+function oshi_fail(string $message): void
+{
+    $line = '[' . date('Y-m-d H:i:s') . '] ' . ($_GET['action'] ?? '') . ' ' . $message . "\n";
+    @file_put_contents(APP_DIR . '/data/error.log', $line, FILE_APPEND);
+    if (!headers_sent()) {
+        http_response_code(500);
+        header('Content-Type: application/json; charset=utf-8');
+    }
+    echo json_encode(['error' => 'サーバーでエラーが起きました: ' . $message], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+}
+function oshi_short_error(string $msg, string $file, int $line): string
+{
+    return str_replace(APP_DIR . '/', '', $msg) . '（' . basename($file) . ' ' . $line . '行目）';
+}
+set_exception_handler(function (Throwable $e) {
+    oshi_fail(oshi_short_error($e->getMessage(), $e->getFile(), $e->getLine()));
+});
+register_shutdown_function(function () {
+    $e = error_get_last();
+    if ($e && in_array($e['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+        oshi_fail(oshi_short_error($e['message'], $e['file'], $e['line']));
+    }
+});
+@mkdir(APP_DIR . '/data', 0700, true);
+
 $config = require APP_DIR . '/config.php';
 require APP_DIR . '/functions.php';
 require APP_DIR . '/oshi_lib.php';
+if (!function_exists('oshi_resolve_channel')) {
+    oshi_fail('oshi_lib.php が古いままです。最新の oshi_lib.php をアップロードしてください。');
+    exit;
+}
+if (!extension_loaded('pdo_sqlite')) {
+    oshi_fail('この PHP では SQLite（pdo_sqlite）が使えません。コントロールパネルで PHP のバージョンを確認してください。');
+    exit;
+}
 
 if (!defined('OSHI_RANKING')) {
     header('X-Robots-Tag: noindex, nofollow'); // ランキング以外（ログイン・MY推し一覧）は検索に載せない
@@ -27,7 +62,7 @@ function oshi_json(int $status, array $body): void
 {
     http_response_code($status);
     header('Content-Type: application/json; charset=utf-8');
-    echo json_encode($body, JSON_UNESCAPED_UNICODE);
+    echo json_encode($body, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
     exit;
 }
 
@@ -240,6 +275,15 @@ header('Content-Type: text/html; charset=utf-8');
   <?php endif; ?>
 <?php endif; ?>
 <script>
+// サーバーの返事を読む（JSON でない返事やエラーでも、分かるメッセージにする）
+function readJson(r) {
+  return r.text().then(function (t) {
+    var j = null;
+    try { j = JSON.parse(t); } catch (e) {}
+    if (!r.ok || !j) throw new Error((j && j.error) || ('サーバーから正しい返事がありませんでした（HTTP ' + r.status + '）' + (t ? '：' + t.replace(/<[^>]*>/g, ' ').trim().slice(0, 120) : '')));
+    return j;
+  });
+}
 var form = document.getElementById('add-form');
 if (form) {
   form.addEventListener('submit', function (e) {
@@ -248,7 +292,7 @@ if (form) {
     btn.disabled = true; msg.textContent = '確認中…';
     fetch(<?= json_encode($self) ?> + '?action=add_url', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Oshi': '1' },
       body: JSON.stringify({ url: document.getElementById('add-url').value }) })
-      .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status)); return j; }); })
+      .then(readJson)
       .then(function () { location.reload(); })
       .catch(function (err) { msg.textContent = err.message; btn.disabled = false; });
   });
@@ -258,7 +302,8 @@ document.querySelectorAll('.rm').forEach(function (b) {
     if (!confirm('このチャンネルを MY推しから外しますか？')) return;
     fetch(<?= json_encode($self) ?> + '?action=remove', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Oshi': '1' },
       body: JSON.stringify({ channel_id: b.dataset.channel }) })
-      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); b.closest('tr').remove(); })
+      .then(readJson)
+      .then(function () { b.closest('tr').remove(); })
       .catch(function (e) { alert('取り消せませんでした: ' + e.message); });
   });
 });

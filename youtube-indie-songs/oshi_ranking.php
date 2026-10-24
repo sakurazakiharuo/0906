@@ -112,7 +112,14 @@ document.querySelectorAll('.oshibtn').forEach(function (b) {
     b.disabled = true;
     fetch(<?= json_encode($base . 'oshi.php') ?> + '?action=' + (on ? 'remove' : 'add'), { method: 'POST', credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json', 'X-Oshi': '1' }, body: JSON.stringify({ channel_id: b.dataset.channel }) })
-      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); b.classList.toggle('on', !on); b.textContent = on ? '＋MY推し' : '✓MY推し'; })
+      .then(function (r) {
+        return r.text().then(function (t) {
+          var j = null;
+          try { j = JSON.parse(t); } catch (e) {}
+          if (!r.ok || !j) throw new Error((j && j.error) || ('サーバーから正しい返事がありませんでした（HTTP ' + r.status + '）'));
+          b.classList.toggle('on', !on); b.textContent = on ? '＋MY推し' : '✓MY推し';
+        });
+      })
       .catch(function (e) { alert(e.message); })
       .then(function () { b.disabled = false; });
   });

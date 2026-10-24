@@ -18,7 +18,7 @@ header('X-Content-Type-Options: nosniff');
 function reply(int $status, array $body): void
 {
     http_response_code($status);
-    echo json_encode($body, JSON_UNESCAPED_UNICODE);
+    echo json_encode($body, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
     exit;
 }
 

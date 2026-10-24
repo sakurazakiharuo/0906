@@ -167,7 +167,14 @@ document.addEventListener('click', function (e) {
   function send(action, channel) {
     return fetch('oshi.php?action=' + action, { method: 'POST', credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json', 'X-Oshi': '1' }, body: JSON.stringify({ channel_id: channel }) })
-      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
+      .then(function (r) {
+        return r.text().then(function (t) {
+          var j = null;
+          try { j = JSON.parse(t); } catch (e) {}
+          if (!r.ok || !j) throw new Error((j && j.error) || ('サーバーから正しい返事がありませんでした（HTTP ' + r.status + '）'));
+          return j;
+        });
+      });
   }
   fetch('oshi.php?action=me', { credentials: 'same-origin' })
     .then(function (r) { if (!r.ok) throw new Error(); return r.json(); })
