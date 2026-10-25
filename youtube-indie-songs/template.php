@@ -26,7 +26,7 @@ $U = $P['ui'];
 <style>
   body { font-family: system-ui, "Hiragino Sans", "Noto Sans JP", "Noto Sans TC", "PingFang TC", "Noto Sans KR", "Apple SD Gothic Neo", sans-serif; margin: 0; padding: 16px; background: #fafafa; color: #222; }
   h1 { font-size: 1.4rem; margin: 0 0 4px; }
-  h1 .sub { display: block; font-size: .85rem; font-weight: normal; color: #666; margin-top: 2px; }
+  h1 .sub { display: block; font-size: .9rem; font-weight: normal; color: #555; margin-top: 4px; line-height: 1.6; }
   .tabs { display: flex; gap: 4px; border-bottom: 2px solid #c00; margin: 12px 0 12px; }
   .tabs a { padding: 6px 14px; border-radius: 6px 6px 0 0; background: #eee; color: #444; font-size: .9rem; }
   .tabs a.active { background: #c00; color: #fff; font-weight: bold; }
@@ -42,7 +42,9 @@ $U = $P['ui'];
   .empty { padding: 24px; text-align: center; color: #888; }
   h2 { font-size: 1.1rem; margin: 24px 0 4px; }
   h2 small { font-size: .8rem; font-weight: normal; color: #666; }
-  .note { color: #666; font-size: .8rem; margin: 0 0 10px; }
+  .note { color: #666; font-size: .85rem; margin: 0 0 4px; line-height: 1.6; }
+  h2 + .note { margin-top: 4px; }
+  .picks, .wrap { margin-top: 10px; }
   .picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-bottom: 8px; }
   .pick { background: #fff; border: 1px solid #eee; border-radius: 8px; padding: 12px; }
   .pick .t { font-weight: bold; display: block; margin-bottom: 4px; }
@@ -63,7 +65,7 @@ $U = $P['ui'];
 </style>
 </head>
 <body>
-<h1><?= h($U['h1']) ?><span class="sub"><?= h($U['sub']) ?></span></h1>
+<h1><?= h($U['h1']) ?><span class="sub"><?= nl2br(h($U['sub'])) ?></span></h1>
 
 <nav class="tabs">
 <?php foreach ($tabs as $t): ?>
@@ -79,7 +81,7 @@ $U = $P['ui'];
 
 <?php if (!empty($pickup)): ?>
 <h2><?= h($U['pickup']) ?></h2>
-<p class="note"><?= h(sprintf($U['pickup_note'], $config['pickup_max_subscribers'])) ?></p>
+<?php foreach ((array)$U['pickup_note'] as $para): ?><p class="note"><?= h(sprintf($para, $config['pickup_max_subscribers'])) ?></p><?php endforeach; ?>
 <div class="picks">
 <?php foreach ($pickup as $p): ?>
   <div class="pick">
@@ -95,8 +97,8 @@ $U = $P['ui'];
 <?php endif; ?>
 
 <?php if (!empty($mebuki)): ?>
-<h2><?= h($U['mebuki']) ?> <small><?= h(sprintf($U['mebuki_sub'], count($mebuki))) ?></small></h2>
-<p class="note"><?= h($U['mebuki_note']) ?></p>
+<h2><?= h(sprintf($U['mebuki'], count($mebuki))) ?></h2>
+<?php foreach ((array)$U['mebuki_note'] as $para): ?><p class="note"><?= h(sprintf($para, count($mebuki), $config['max_subscribers'])) ?></p><?php endforeach; ?>
 <div class="wrap">
 <table class="mebuki">
   <thead>
