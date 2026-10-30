@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">デュアルカラオケ</string>
+    <string name="vocal_title">🎧 歌手用（ボーカル入り音源）</string>
+    <string name="karaoke_title">🔊 スピーカー用（カラオケ音源）</string>
+    <string name="choose_file">音源ファイルを選ぶ</string>
+    <string name="no_file">（未選択）</string>
+    <string name="output">出力先</string>
+    <string name="volume">音量</string>
+    <string name="refresh_devices">出力機器を再検出</string>
+    <string name="sync_title">⏱ ずれ補正</string>
+    <string name="sync_help">Bluetoothイヤホンは音が遅れて届きます（多くは0.1〜0.3秒）。イヤホンとスピーカーの音がそろうように調整してください。</string>
+    <string name="play">▶ 再生</string>
+    <string name="pause">⏸ 一時停止</string>
+    <string name="stop">⏹ 停止</string>
+    <string name="auto_device">自動（システムの既定）</string>
+    <string name="note">※ Androidは通常、Bluetoothで音楽を流せるのは同時に1台までです。イヤホンをBluetooth、スピーカーをUSB・有線・本体スピーカーにしてください。</string>
+</resources>
