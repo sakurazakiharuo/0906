@@ -17,5 +17,12 @@
     <string name="preset_title">🎵 曲ボタン</string>
     <string name="preset_help">タップで曲を呼び出し。長押しで、下で選んでいる2つの音源をそのボタンに登録します。</string>
     <string name="preset_empty">（未登録）</string>
+    <string name="output_mode_title">🔧 音切れ対策</string>
+    <string name="output_mode_help">音がぶつぶつ切れるときは、モードを切り替えて一番きれいに鳴るものを選んでください。切り替えるとずれ具合も変わるので、ずれ補正を合わせ直してください。</string>
+    <string-array name="output_modes">
+        <item>標準</item>
+        <item>対策A（イヤホン＝省電力／スピーカー＝低遅延）</item>
+        <item>対策B（イヤホン＝低遅延／スピーカー＝省電力）</item>
+    </string-array>
     <string name="note">※ Androidは通常、Bluetoothで音楽を流せるのは同時に1台までです。イヤホンをBluetooth、スピーカーをUSB・有線・本体スピーカーにしてください。</string>
 </resources>

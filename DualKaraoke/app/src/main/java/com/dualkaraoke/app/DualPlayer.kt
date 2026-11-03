@@ -34,7 +34,7 @@ class DualPlayer(private val context: Context) {
 
     enum class Role { VOCAL, KARAOKE }
 
-    private class Track {
+    private class Track(val role: Role) {
         var uri: Uri? = null
         var durationMs = 0
         @Volatile var device: AudioDeviceInfo? = null
@@ -44,7 +44,7 @@ class DualPlayer(private val context: Context) {
     }
 
     private val handler = Handler(Looper.getMainLooper())
-    private val tracks = linkedMapOf(Role.VOCAL to Track(), Role.KARAOKE to Track())
+    private val tracks = linkedMapOf(Role.VOCAL to Track(Role.VOCAL), Role.KARAOKE to Track(Role.KARAOKE))
 
     var onCompletion: (() -> Unit)? = null
     var onError: ((String) -> Unit)? = null
@@ -71,6 +71,29 @@ class DualPlayer(private val context: Context) {
                 t.lagMs = lag
             }
         }
+
+    /**
+     * 音切れ対策モード。
+     * 0: 標準 / 1: イヤホン=省電力・スピーカー=低遅延 / 2: イヤホン=低遅延・スピーカー=省電力
+     *
+     * 機種によっては、2つの音が同じ出力経路を通ると経路が両方の機器の間で切り替わり続けて
+     * 音が途切れる。性能モードを変えると別々の出力経路に分かれ、途切れなくなることがある。
+     */
+    var outputMode = 0
+        set(value) {
+            if (field == value) return
+            field = value
+            if (isPlaying) startAt(positionMs()) else if (started) seekTo(positionMs())
+        }
+
+    private fun performanceMode(role: Role): Int {
+        val lowLatency = when (outputMode) {
+            1 -> role == Role.KARAOKE
+            2 -> role == Role.VOCAL
+            else -> return AudioTrack.PERFORMANCE_MODE_NONE
+        }
+        return if (lowLatency) AudioTrack.PERFORMANCE_MODE_LOW_LATENCY else AudioTrack.PERFORMANCE_MODE_POWER_SAVING
+    }
 
     private fun track(role: Role) = tracks.getValue(role)
 
@@ -304,20 +327,19 @@ class DualPlayer(private val context: Context) {
                 var outFormat: MediaFormat? = null
                 var inputDone = false
                 while (!stopped) {
-                    if (!inputDone) {
-                        val inIndex = codec.dequeueInputBuffer(10_000)
-                        if (inIndex >= 0) {
-                            val size = extractor.readSampleData(codec.getInputBuffer(inIndex)!!, 0)
-                            if (size < 0) {
-                                codec.queueInputBuffer(inIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
-                                inputDone = true
-                            } else {
-                                codec.queueInputBuffer(inIndex, 0, size, extractor.sampleTime, 0)
-                                extractor.advance()
-                            }
+                    while (!inputDone) {
+                        val inIndex = codec.dequeueInputBuffer(0)
+                        if (inIndex < 0) break
+                        val size = extractor.readSampleData(codec.getInputBuffer(inIndex)!!, 0)
+                        if (size < 0) {
+                            codec.queueInputBuffer(inIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                            inputDone = true
+                        } else {
+                            codec.queueInputBuffer(inIndex, 0, size, extractor.sampleTime, 0)
+                            extractor.advance()
                         }
                     }
-                    val outIndex = codec.dequeueOutputBuffer(info, 10_000)
+                    val outIndex = codec.dequeueOutputBuffer(info, 2_000)
                     if (outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
                         outFormat = codec.outputFormat
                     } else if (outIndex >= 0) {
@@ -421,6 +443,7 @@ class DualPlayer(private val context: Context) {
                 .setAudioFormat(audioFormat)
                 .setBufferSizeInBytes(bufferBytes)
                 .setTransferMode(AudioTrack.MODE_STREAM)
+                .setPerformanceMode(performanceMode(track.role))
                 .build()
                 .apply {
                     setPreferredDevice(track.device)

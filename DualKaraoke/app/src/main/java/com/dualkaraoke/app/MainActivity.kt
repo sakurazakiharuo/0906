@@ -99,6 +99,7 @@ class MainActivity : Activity() {
         setupVolume(R.id.vocalVolume, Role.VOCAL)
         setupVolume(R.id.karaokeVolume, Role.KARAOKE)
         setupOffset()
+        setupOutputMode()
         setupTransport()
         setupPresets()
 
@@ -418,6 +419,24 @@ class MainActivity : Activity() {
         })
     }
 
+    private fun setupOutputMode() {
+        val spinner = findViewById<Spinner>(R.id.outputModeSpinner)
+        spinner.adapter = ArrayAdapter(
+            this, android.R.layout.simple_spinner_dropdown_item, resources.getStringArray(R.array.output_modes)
+        )
+        val saved = prefs.getInt(KEY_OUTPUT_MODE, DEFAULT_OUTPUT_MODE)
+        player.outputMode = saved
+        spinner.setSelection(saved)
+        spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                player.outputMode = position
+                prefs.edit().putInt(KEY_OUTPUT_MODE, position).apply()
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+    }
+
     private fun setupOffset() {
         setOffset(prefs.getInt(KEY_OFFSET, 0))
         offsetSeek.setOnSeekBarChangeListener(object : SimpleSeekListener() {
@@ -516,6 +535,8 @@ class MainActivity : Activity() {
         private const val KEY_KARAOKE_DEVICE = "karaoke_device"
         private const val KEY_OFFSET = "offset_ms"
         private const val KEY_SELECTED_PRESET = "selected_preset"
+        private const val KEY_OUTPUT_MODE = "output_mode"
+        private const val DEFAULT_OUTPUT_MODE = 1
         private const val PRESET_COUNT = 12
         private const val PRESET_COLUMNS = 4
         private const val SELECTED_PRESET_COLOR = 0xFFFFB74D.toInt()

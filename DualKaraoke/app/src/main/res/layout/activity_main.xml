@@ -140,6 +140,26 @@
             android:textColor="#C62828"
             android:visibility="gone" />
 
+        <!-- 音切れ対策 -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="@string/output_mode_title"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/output_mode_help"
+            android:textSize="13sp" />
+
+        <Spinner
+            android:id="@+id/outputModeSpinner"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+
         <!-- ずれ補正 -->
         <TextView
             android:layout_width="match_parent"
