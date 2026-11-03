@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- ヘッドホンのバンド -->
+    <path
+        android:pathData="M29,64 A25,25 0,0 1,79,64"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeWidth="5" />
+    <!-- イヤーカップ -->
+    <path
+        android:fillColor="#FFFFD54F"
+        android:pathData="M27,58h3a4,4 0,0 1,4,4v10a4,4 0,0 1,-4,4h-3a4,4 0,0 1,-4,-4v-10a4,4 0,0 1,4,-4z M78,58h3a4,4 0,0 1,4,4v10a4,4 0,0 1,-4,4h-3a4,4 0,0 1,-4,-4v-10a4,4 0,0 1,4,-4z" />
+    <!-- マイク -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M54,47h0a7,7 0,0 1,7,7v7a7,7 0,0 1,-7,7h-0a7,7 0,0 1,-7,-7v-7a7,7 0,0 1,7,-7z" />
+    <path
+        android:pathData="M43,62 A11,11 0,0 0,65,62 M54,73 L54,79 M48,80 L60,80"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeWidth="3" />
+</vector>

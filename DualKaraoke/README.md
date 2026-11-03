@@ -49,3 +49,29 @@ Androidは通常、**Bluetoothで音楽（A2DP）を流せるのは同時に1台
 出力先は `AudioTrack.setPreferredDevice(AudioDeviceInfo)` で指定します。
 両方の出力に約0.4秒分の音を貯めてから同時に再生を始め、再生中は位置を飛ばしません。
 ずれ補正は、無音の挿入または音の読み飛ばしで反映します。
+
+## Google Play へのリリース手順
+
+### 1. 署名付きアプリバンドル（.aab）を作る
+1. Android Studio で **Build → Generate Signed App Bundle or APK** → **Android App Bundle** を選ぶ
+2. 初回は **Create new...** でアップロード鍵を作る
+   - 保存場所はこのフォルダの**外**（例：`Documents/keys/dualkaraoke-upload.jks`）
+   - パスワードと Key alias（例：`upload`）を控えておく
+   - ⚠️ この鍵ファイルとパスワードは絶対になくさない・公開しない（Gitにも入れない）
+3. Build Variant は **release** を選んで Create
+4. `DualKaraoke/app/release/app-release.aab` ができる
+
+更新版を出すときは、`app/build.gradle.kts` の `versionCode` を1つ増やし（`versionName` も変更）、同じ鍵で作る。
+
+### 2. Play Console に登録する素材
+| 項目 | 用意したもの |
+|---|---|
+| アプリアイコン 512×512 | `store/icon-512.png` |
+| フィーチャーグラフィック 1024×500 | `store/feature-1024x500.png` |
+| スクリーンショット（2枚以上） | スマホで撮影する（市販曲の曲名やジャケットが写らないように） |
+| プライバシーポリシーURL | `https://sakurazakiharuo.github.io/0906/dualkaraoke/privacy.html`（GitHub Pages を有効にした後） |
+
+### 3. データセーフティの回答
+- データを収集しますか → **いいえ**
+- データを共有しますか → **いいえ**
+（本アプリはインターネット権限を持たず、外部と通信しない）

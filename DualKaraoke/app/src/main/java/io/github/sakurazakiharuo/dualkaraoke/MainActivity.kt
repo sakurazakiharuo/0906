@@ -9,12 +9,14 @@ import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.OpenableColumns
 import android.text.TextUtils
 import android.view.View
+import android.view.WindowInsets
 import android.view.WindowManager
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
@@ -70,6 +72,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        applySystemBarInsets()
 
         audioManager = getSystemService(AudioManager::class.java)
         prefs = getSharedPreferences("settings", MODE_PRIVATE)
@@ -119,6 +122,21 @@ class MainActivity : Activity() {
         audioManager.unregisterAudioDeviceCallback(deviceCallback)
         player.release()
         super.onDestroy()
+    }
+
+    /**
+     * Android 15以降は画面が端まで広がるので、ナビゲーションバーに操作ボタンが隠れないよう余白をとる。
+     * 上端はアクションバーが状態バーの分をよけてくれる。
+     */
+    private fun applySystemBarInsets() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) return
+        val root = findViewById<View>(R.id.root)
+        val base = root.paddingBottom
+        root.setOnApplyWindowInsetsListener { v, insets ->
+            val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
+            v.setPadding(bars.left, v.paddingTop, bars.right, base + bars.bottom)
+            insets
+        }
     }
 
     // ---- 音源ファイル ----
