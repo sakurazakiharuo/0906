@@ -32,7 +32,7 @@ Androidは通常、**Bluetoothで音楽（A2DP）を流せるのは同時に1台
 - **呼び出し**：番号ボタンを**タップ**すると、2つの音源がまとめて切り替わります（選択中のボタンはオレンジ色）
 - 長押しメニューから「名前を変更」「登録を消す」もできます
 
-再生中は約0.5秒ごとに2つのプレーヤーの位置を比べ、80ms以上ずれたらカラオケ側を合わせ直します。
+ずれ補正は再生中に動かしても、音を止めずに反映されます。
 
 ## ビルド
 
@@ -45,5 +45,7 @@ Androidは通常、**Bluetoothで音楽（A2DP）を流せるのは同時に1台
 
 ## 仕組み
 
-`MediaPlayer` を2つ使い、`MediaPlayer.setPreferredDevice(AudioDeviceInfo)` で
-それぞれの出力機器を指定しています（`DualPlayer.kt`）。
+各音源を `MediaCodec` でデコードし、出力機器ごとの `AudioTrack` に流しています（`DualPlayer.kt`）。
+出力先は `AudioTrack.setPreferredDevice(AudioDeviceInfo)` で指定します。
+両方の出力に約0.4秒分の音を貯めてから同時に再生を始め、再生中は位置を飛ばしません。
+ずれ補正は、無音の挿入または音の読み飛ばしで反映します。
