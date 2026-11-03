@@ -24,5 +24,6 @@
         <item>対策A（イヤホン＝省電力／スピーカー＝低遅延）</item>
         <item>対策B（イヤホン＝低遅延／スピーカー＝省電力）</item>
     </string-array>
+    <string name="privacy_policy">プライバシーポリシー</string>
     <string name="note">※ Androidは通常、Bluetoothで音楽を流せるのは同時に1台までです。イヤホンをBluetooth、スピーカーをUSB・有線・本体スピーカーにしてください。</string>
 </resources>

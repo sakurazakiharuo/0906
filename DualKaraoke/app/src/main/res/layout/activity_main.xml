@@ -254,5 +254,14 @@
                 android:textSize="18sp" />
         </LinearLayout>
 
+        <Button
+            android:id="@+id/privacyButton"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="24dp"
+            android:text="@string/privacy_policy" />
+
     </LinearLayout>
 </ScrollView>

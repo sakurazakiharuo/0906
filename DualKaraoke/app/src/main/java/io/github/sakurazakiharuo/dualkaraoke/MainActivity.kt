@@ -2,6 +2,7 @@ package io.github.sakurazakiharuo.dualkaraoke
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.res.ColorStateList
@@ -95,6 +96,7 @@ class MainActivity : Activity() {
         findViewById<Button>(R.id.vocalFileButton).setOnClickListener { pickFile(REQUEST_VOCAL) }
         findViewById<Button>(R.id.karaokeFileButton).setOnClickListener { pickFile(REQUEST_KARAOKE) }
         findViewById<Button>(R.id.refreshButton).setOnClickListener { refreshDevices() }
+        findViewById<Button>(R.id.privacyButton).setOnClickListener { openPrivacyPolicy() }
 
         vocalSpinner.onItemSelectedListener = deviceListener(Role.VOCAL)
         karaokeSpinner.onItemSelectedListener = deviceListener(Role.KARAOKE)
@@ -136,6 +138,14 @@ class MainActivity : Activity() {
             val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
             v.setPadding(bars.left, v.paddingTop, bars.right, base + bars.bottom)
             insets
+        }
+    }
+
+    private fun openPrivacyPolicy() {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PRIVACY_POLICY_URL)))
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(this, PRIVACY_POLICY_URL, Toast.LENGTH_LONG).show()
         }
     }
 
@@ -544,6 +554,7 @@ class MainActivity : Activity() {
     }
 
     companion object {
+        private const val PRIVACY_POLICY_URL = "https://sakurazakiharuo.github.io/0906/dualkaraoke/privacy.html"
         private const val REQUEST_VOCAL = 1
         private const val REQUEST_KARAOKE = 2
         private const val OFFSET_RANGE_MS = 500
