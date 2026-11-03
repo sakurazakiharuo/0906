@@ -1,4 +1,4 @@
-package com.dualkaraoke.app
+package io.github.sakurazakiharuo.dualkaraoke
 
 import android.content.Context
 import android.media.AudioAttributes

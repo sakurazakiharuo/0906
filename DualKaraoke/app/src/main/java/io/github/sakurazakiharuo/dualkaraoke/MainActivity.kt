@@ -1,4 +1,4 @@
-package com.dualkaraoke.app
+package io.github.sakurazakiharuo.dualkaraoke
 
 import android.app.Activity
 import android.app.AlertDialog
@@ -25,7 +25,7 @@ import android.widget.SeekBar
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
-import com.dualkaraoke.app.DualPlayer.Role
+import io.github.sakurazakiharuo.dualkaraoke.DualPlayer.Role
 
 class MainActivity : Activity() {
 

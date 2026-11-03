@@ -45,7 +45,7 @@ Androidは通常、**Bluetoothで音楽（A2DP）を流せるのは同時に1台
 
 ## 仕組み
 
-各音源を `MediaCodec` でデコードし、出力機器ごとの `AudioTrack` に流しています（`DualPlayer.kt`）。
+各音源を `MediaCodec` でデコードし、出力機器ごとの `AudioTrack` に流しています（`app/src/main/java/io/github/sakurazakiharuo/dualkaraoke/DualPlayer.kt`）。
 出力先は `AudioTrack.setPreferredDevice(AudioDeviceInfo)` で指定します。
 両方の出力に約0.4秒分の音を貯めてから同時に再生を始め、再生中は位置を飛ばしません。
 ずれ補正は、無音の挿入または音の読み飛ばしで反映します。

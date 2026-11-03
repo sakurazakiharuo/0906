@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.dualkaraoke.app"
+    namespace = "io.github.sakurazakiharuo.dualkaraoke"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.dualkaraoke.app"
+        applicationId = "io.github.sakurazakiharuo.dualkaraoke"
         minSdk = 26
         targetSdk = 34
         versionCode = 1
