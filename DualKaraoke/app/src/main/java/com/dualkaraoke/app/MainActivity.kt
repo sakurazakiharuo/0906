@@ -1,8 +1,10 @@
 package com.dualkaraoke.app
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.res.ColorStateList
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
@@ -11,11 +13,14 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.OpenableColumns
+import android.text.TextUtils
 import android.view.View
 import android.view.WindowManager
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.Spinner
 import android.widget.TextView
@@ -47,6 +52,8 @@ class MainActivity : Activity() {
     private var karaokeDeviceId: Int? = null
     private var updatingSpinners = false
     private var userSeeking = false
+    private val currentUris = mutableMapOf<Role, Uri?>()
+    private val presetButtons = ArrayList<Button>()
 
     private val deviceCallback = object : AudioDeviceCallback() {
         override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>) = refreshDevices()
@@ -93,6 +100,7 @@ class MainActivity : Activity() {
         setupVolume(R.id.karaokeVolume, Role.KARAOKE)
         setupOffset()
         setupTransport()
+        setupPresets()
 
         vocalDeviceId = prefs.getInt(KEY_VOCAL_DEVICE, -1).takeIf { it >= 0 }
         karaokeDeviceId = prefs.getInt(KEY_KARAOKE_DEVICE, -1).takeIf { it >= 0 }
@@ -132,23 +140,29 @@ class MainActivity : Activity() {
         } catch (_: SecurityException) {
         }
         when (requestCode) {
-            REQUEST_VOCAL -> loadSource(Role.VOCAL, uri, KEY_VOCAL_URI)
-            REQUEST_KARAOKE -> loadSource(Role.KARAOKE, uri, KEY_KARAOKE_URI)
+            REQUEST_VOCAL -> loadSource(Role.VOCAL, uri)
+            REQUEST_KARAOKE -> loadSource(Role.KARAOKE, uri)
         }
+        setSelectedPreset(0)
     }
 
     private fun restoreSource(role: Role, key: String) {
-        val saved = prefs.getString(key, null) ?: return
-        val uri = Uri.parse(saved)
-        val stillGranted = contentResolver.persistedUriPermissions.any { it.uri == uri && it.isReadPermission }
-        if (stillGranted) loadSource(role, uri, key) else prefs.edit().remove(key).apply()
+        val uri = prefs.getString(key, null)?.let { Uri.parse(it) } ?: return
+        if (isReadable(uri)) loadSource(role, uri) else prefs.edit().remove(key).apply()
     }
 
-    private fun loadSource(role: Role, uri: Uri, key: String) {
-        val ok = player.setSource(role, uri)
-        val label = if (ok) displayName(uri) else getString(R.string.no_file)
+    private fun isReadable(uri: Uri) =
+        contentResolver.persistedUriPermissions.any { it.uri == uri && it.isReadPermission }
+
+    private fun loadSource(role: Role, uri: Uri?) {
+        val ok = uri != null && player.setSource(role, uri)
+        if (!ok) player.setSource(role, null)
+        val loaded = if (ok) uri else null
+        currentUris[role] = loaded
+        val label = if (loaded != null) displayName(loaded) else getString(R.string.no_file)
         (if (role == Role.VOCAL) vocalFileName else karaokeFileName).text = label
-        prefs.edit().apply { if (ok) putString(key, uri.toString()) else remove(key) }.apply()
+        val key = if (role == Role.VOCAL) KEY_VOCAL_URI else KEY_KARAOKE_URI
+        prefs.edit().apply { if (loaded != null) putString(key, loaded.toString()) else remove(key) }.apply()
         positionSeek.max = player.durationMs()
         updatePlayButton()
     }
@@ -158,6 +172,146 @@ class MainActivity : Activity() {
             if (it.moveToFirst()) return it.getString(0)
         }
         return uri.lastPathSegment ?: uri.toString()
+    }
+
+    // ---- 曲ボタン ----
+
+    private fun setupPresets() {
+        val grid = findViewById<LinearLayout>(R.id.presetGrid)
+        val height = (72 * resources.displayMetrics.density).toInt()
+        for (row in 0 until PRESET_COUNT / PRESET_COLUMNS) {
+            val rowLayout = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            for (col in 0 until PRESET_COLUMNS) {
+                val slot = row * PRESET_COLUMNS + col + 1
+                val button = Button(this).apply {
+                    isAllCaps = false
+                    maxLines = 2
+                    ellipsize = TextUtils.TruncateAt.END
+                    textSize = 13f
+                    setOnClickListener { selectPreset(slot) }
+                    setOnLongClickListener {
+                        showPresetMenu(slot)
+                        true
+                    }
+                }
+                rowLayout.addView(button, LinearLayout.LayoutParams(0, height, 1f))
+                presetButtons.add(button)
+            }
+            grid.addView(rowLayout)
+        }
+        updatePresetButtons()
+    }
+
+    private fun presetKey(slot: Int, field: String) = "preset_${slot}_$field"
+
+    private fun presetUri(slot: Int, role: Role) =
+        prefs.getString(presetKey(slot, if (role == Role.VOCAL) "vocal" else "karaoke"), null)?.let { Uri.parse(it) }
+
+    private fun isPresetRegistered(slot: Int) =
+        presetUri(slot, Role.VOCAL) != null || presetUri(slot, Role.KARAOKE) != null
+
+    private fun updatePresetButtons() {
+        val selected = prefs.getInt(KEY_SELECTED_PRESET, 0)
+        presetButtons.forEachIndexed { i, button ->
+            val slot = i + 1
+            val name = if (isPresetRegistered(slot)) {
+                prefs.getString(presetKey(slot, "name"), null) ?: ""
+            } else {
+                getString(R.string.preset_empty)
+            }
+            button.text = "$slot\n$name"
+            button.backgroundTintList =
+                if (slot == selected) ColorStateList.valueOf(SELECTED_PRESET_COLOR) else null
+        }
+    }
+
+    private fun setSelectedPreset(slot: Int) {
+        prefs.edit().putInt(KEY_SELECTED_PRESET, slot).apply()
+        updatePresetButtons()
+    }
+
+    private fun selectPreset(slot: Int) {
+        if (!isPresetRegistered(slot)) {
+            Toast.makeText(this, "長押しすると、今選んでいる曲をボタン${slot}に登録できます", Toast.LENGTH_LONG).show()
+            return
+        }
+        player.stop()
+        var missing = false
+        for (role in Role.values()) {
+            val uri = presetUri(slot, role)?.takeIf { isReadable(it) }
+            if (uri == null && presetUri(slot, role) != null) missing = true
+            loadSource(role, uri)
+        }
+        if (missing) {
+            Toast.makeText(this, "見つからないファイルがあります。登録し直してください", Toast.LENGTH_LONG).show()
+        }
+        setSelectedPreset(slot)
+        updatePosition()
+    }
+
+    private fun showPresetMenu(slot: Int) {
+        val registered = isPresetRegistered(slot)
+        val items = mutableListOf("今選んでいる曲をボタン${slot}に登録")
+        if (registered) items += listOf("名前を変更", "登録を消す")
+        AlertDialog.Builder(this)
+            .setTitle("ボタン $slot")
+            .setItems(items.toTypedArray()) { _, which ->
+                when (which) {
+                    0 -> registerPreset(slot)
+                    1 -> renamePreset(slot)
+                    2 -> clearPreset(slot)
+                }
+            }
+            .show()
+    }
+
+    private fun registerPreset(slot: Int) {
+        val vocal = currentUris[Role.VOCAL]
+        val karaoke = currentUris[Role.KARAOKE]
+        if (vocal == null && karaoke == null) {
+            Toast.makeText(this, "先に歌手用・スピーカー用の音源を選んでください", Toast.LENGTH_LONG).show()
+            return
+        }
+        val name = displayName(vocal ?: karaoke!!).substringBeforeLast('.')
+        prefs.edit()
+            .putString(presetKey(slot, "vocal"), vocal?.toString())
+            .putString(presetKey(slot, "karaoke"), karaoke?.toString())
+            .putString(presetKey(slot, "name"), name)
+            .apply()
+        setSelectedPreset(slot)
+        Toast.makeText(this, "ボタン${slot}に「$name」を登録しました", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun renamePreset(slot: Int) {
+        val input = EditText(this).apply {
+            setText(prefs.getString(presetKey(slot, "name"), ""))
+            setSingleLine()
+            selectAll()
+        }
+        AlertDialog.Builder(this)
+            .setTitle("ボタン $slot の名前")
+            .setView(input)
+            .setPositiveButton("OK") { _, _ ->
+                prefs.edit().putString(presetKey(slot, "name"), input.text.toString().trim()).apply()
+                updatePresetButtons()
+            }
+            .setNegativeButton("キャンセル", null)
+            .show()
+    }
+
+    private fun clearPreset(slot: Int) {
+        AlertDialog.Builder(this)
+            .setMessage("ボタン${slot}の登録を消しますか？（音源ファイル自体は消えません）")
+            .setPositiveButton("消す") { _, _ ->
+                prefs.edit()
+                    .remove(presetKey(slot, "vocal"))
+                    .remove(presetKey(slot, "karaoke"))
+                    .remove(presetKey(slot, "name"))
+                    .apply()
+                if (prefs.getInt(KEY_SELECTED_PRESET, 0) == slot) setSelectedPreset(0) else updatePresetButtons()
+            }
+            .setNegativeButton("キャンセル", null)
+            .show()
     }
 
     // ---- 出力機器 ----
@@ -361,5 +515,9 @@ class MainActivity : Activity() {
         private const val KEY_VOCAL_DEVICE = "vocal_device"
         private const val KEY_KARAOKE_DEVICE = "karaoke_device"
         private const val KEY_OFFSET = "offset_ms"
+        private const val KEY_SELECTED_PRESET = "selected_preset"
+        private const val PRESET_COUNT = 12
+        private const val PRESET_COLUMNS = 4
+        private const val SELECTED_PRESET_COLOR = 0xFFFFB74D.toInt()
     }
 }

@@ -15,6 +15,27 @@
             android:text="@string/note"
             android:textSize="13sp" />
 
+        <!-- 曲ボタン -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/preset_title"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/preset_help"
+            android:textSize="13sp" />
+
+        <LinearLayout
+            android:id="@+id/presetGrid"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+
         <!-- 歌手用 -->
         <TextView
             android:layout_width="match_parent"
