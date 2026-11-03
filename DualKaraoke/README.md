@@ -69,7 +69,7 @@ Androidは通常、**Bluetoothで音楽（A2DP）を流せるのは同時に1台
 | アプリアイコン 512×512 | `store/icon-512.png` |
 | フィーチャーグラフィック 1024×500 | `store/feature-1024x500.png` |
 | スクリーンショット（2枚以上） | スマホで撮影する（市販曲の曲名やジャケットが写らないように） |
-| プライバシーポリシーURL | `https://sakurazakiharuo.github.io/0906/dualkaraoke/privacy.html`（GitHub Pages を有効にした後） |
+| プライバシーポリシーURL | `https://nakamurakozo.tv/privacy.html`（`dualkaraoke/privacy.html` をアップロードしたもの） |
 
 ### 3. データセーフティの回答
 - データを収集しますか → **いいえ**

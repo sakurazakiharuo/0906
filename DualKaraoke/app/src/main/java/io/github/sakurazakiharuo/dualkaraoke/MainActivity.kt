@@ -554,7 +554,7 @@ class MainActivity : Activity() {
     }
 
     companion object {
-        private const val PRIVACY_POLICY_URL = "https://sakurazakiharuo.github.io/0906/dualkaraoke/privacy.html"
+        private const val PRIVACY_POLICY_URL = "https://nakamurakozo.tv/privacy.html"
         private const val REQUEST_VOCAL = 1
         private const val REQUEST_KARAOKE = 2
         private const val OFFSET_RANGE_MS = 500
