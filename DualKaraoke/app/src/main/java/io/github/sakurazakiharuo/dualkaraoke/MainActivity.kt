@@ -22,6 +22,7 @@ import android.view.WindowManager
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.SeekBar
@@ -36,6 +37,7 @@ class MainActivity : Activity() {
 
     private lateinit var audioManager: AudioManager
     private lateinit var player: DualPlayer
+    private lateinit var analytics: Analytics
     private lateinit var prefs: SharedPreferences
     private val handler = Handler(Looper.getMainLooper())
 
@@ -77,6 +79,7 @@ class MainActivity : Activity() {
 
         audioManager = getSystemService(AudioManager::class.java)
         prefs = getSharedPreferences("settings", MODE_PRIVATE)
+        analytics = Analytics(this).apply { setEnabled(prefs.getBoolean(KEY_ANALYTICS, true)) }
         player = DualPlayer(this).apply {
             onError = { Toast.makeText(this@MainActivity, it, Toast.LENGTH_LONG).show() }
             onCompletion = { updatePlayButton() }
@@ -97,6 +100,13 @@ class MainActivity : Activity() {
         findViewById<Button>(R.id.karaokeFileButton).setOnClickListener { pickFile(REQUEST_KARAOKE) }
         findViewById<Button>(R.id.refreshButton).setOnClickListener { refreshDevices() }
         findViewById<Button>(R.id.privacyButton).setOnClickListener { openPrivacyPolicy() }
+        findViewById<CheckBox>(R.id.analyticsCheck).apply {
+            isChecked = prefs.getBoolean(KEY_ANALYTICS, true)
+            setOnCheckedChangeListener { _, checked ->
+                prefs.edit().putBoolean(KEY_ANALYTICS, checked).apply()
+                analytics.setEnabled(checked)
+            }
+        }
 
         vocalSpinner.onItemSelectedListener = deviceListener(Role.VOCAL)
         karaokeSpinner.onItemSelectedListener = deviceListener(Role.KARAOKE)
@@ -276,6 +286,7 @@ class MainActivity : Activity() {
         }
         setSelectedPreset(slot)
         updatePosition()
+        analytics.logPresetSelect(slot)
     }
 
     private fun showPresetMenu(slot: Int) {
@@ -308,6 +319,7 @@ class MainActivity : Activity() {
             .putString(presetKey(slot, "name"), name)
             .apply()
         setSelectedPreset(slot)
+        analytics.logPresetRegister(slot)
         Toast.makeText(this, "ボタン${slot}に「$name」を登録しました", Toast.LENGTH_SHORT).show()
     }
 
@@ -457,6 +469,7 @@ class MainActivity : Activity() {
         spinner.setSelection(saved)
         spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                if (player.outputMode != position) analytics.logOutputModeChange(position)
                 player.outputMode = position
                 prefs.edit().putInt(KEY_OUTPUT_MODE, position).apply()
             }
@@ -499,6 +512,7 @@ class MainActivity : Activity() {
             } else if (!player.hasSource(Role.VOCAL) && !player.hasSource(Role.KARAOKE)) {
                 Toast.makeText(this, "音源ファイルを選んでください", Toast.LENGTH_SHORT).show()
             } else {
+                if (player.positionMs() == 0) logPlayStart()
                 player.play()
             }
             updatePlayButton()
@@ -522,6 +536,18 @@ class MainActivity : Activity() {
                 player.seekTo(seekBar.progress)
             }
         })
+    }
+
+    private fun logPlayStart() {
+        analytics.logPlayStart(
+            vocalDevice = devices.firstOrNull { it.device?.id == vocalDeviceId }?.device,
+            karaokeDevice = devices.firstOrNull { it.device?.id == karaokeDeviceId }?.device,
+            hasVocal = player.hasSource(Role.VOCAL),
+            hasKaraoke = player.hasSource(Role.KARAOKE),
+            outputMode = player.outputMode,
+            offsetMs = player.offsetMs,
+            fromPreset = prefs.getInt(KEY_SELECTED_PRESET, 0) != 0,
+        )
     }
 
     private fun updatePlayButton() {
@@ -565,6 +591,7 @@ class MainActivity : Activity() {
         private const val KEY_OFFSET = "offset_ms"
         private const val KEY_SELECTED_PRESET = "selected_preset"
         private const val KEY_OUTPUT_MODE = "output_mode"
+        private const val KEY_ANALYTICS = "analytics_enabled"
         private const val DEFAULT_OUTPUT_MODE = 1
         private const val PRESET_COUNT = 12
         private const val PRESET_COLUMNS = 4

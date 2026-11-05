@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "66835795754",
+    "project_id": "kmx-2109f",
+    "storage_bucket": "kmx-2109f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:66835795754:android:258855a13bf3394e6b1853",
+        "android_client_info": {
+          "package_name": "io.github.sakurazakiharuo.dualkaraoke"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD0-tsmna-MzlIfVYoTe2DTi5JidgIPzZc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
